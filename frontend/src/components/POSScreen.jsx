@@ -724,7 +724,7 @@ function PaymentModal({
           <button
             className="pos-primary-btn full"
             disabled={saving}
-            onClick={confirmCheckout}
+            onClick={() => onComplete(selectedPaymentMethod, finalPayableAfterLoyalty, finalDiscount, discountResult)}
           >
             {saving ? "Saving..." : `Confirm & Pay ${money(settings, finalPayableAfterLoyalty)}`}
           </button>
@@ -1112,9 +1112,7 @@ export default function POSScreen({ token, module, session, onBack }) {
         subtotal,
         items: cart,
         paymentMethod,
-        splitPayments,
-        isSplitPayment: Array.isArray(splitPayments) && splitPayments.length > 0,
-        couponCode
+couponCode
       });
 
       setDiscountResult(res.data);
@@ -1182,9 +1180,7 @@ export default function POSScreen({ token, module, session, onBack }) {
   async function saveOrder({
     paymentStatus,
     paymentMethod,
-        splitPayments,
-        isSplitPayment: Array.isArray(splitPayments) && splitPayments.length > 0,
-    orderStatus,
+orderStatus,
     kitchenStatus,
     payableTotal,
     discountAmount,
@@ -1265,9 +1261,7 @@ export default function POSScreen({ token, module, session, onBack }) {
         currency: settings.currency || "Rs",
         restaurantSettings: settings,
         paymentMethod,
-        splitPayments,
-        isSplitPayment: Array.isArray(splitPayments) && splitPayments.length > 0,
-        paymentStatus,
+paymentStatus,
         orderStatus,
         kitchenStatus,
         orderInstructions: customer.instructions || "",
@@ -2817,7 +2811,7 @@ export default function POSScreen({ token, module, session, onBack }) {
           onLookupCustomer={lookupCustomerByPhone}
           onClose={() => setPaymentModal(false)}
           onRecalculate={calculateDiscounts}
-          onComplete={(method, grandTotal, discountAmount, discounts, splitPayments = []) =>
+          onComplete={(method, grandTotal, discountAmount, discounts) =>
             saveOrder({
               paymentStatus: method === "Complimentary" ? "complimentary" : "paid",
               paymentMethod: method,
@@ -2841,6 +2835,8 @@ export default function POSScreen({ token, module, session, onBack }) {
     </div>
   );
 }
+
+
 
 
 
