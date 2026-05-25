@@ -2,12 +2,73 @@
 import { api } from "../lib/api";
 
 const mainModes = [
-  { number: 1, key: "walk_in", modeKey: "walk_in", name: "Walk In", subtitle: "Counter customer", icon: "🚶", bg: "linear-gradient(135deg,#18181b,#020617)", shadow: "rgba(15,23,42,.45)", animation: "walkAnim" },
-  { number: 2, key: "take_away", modeKey: "take_away", name: "Take Away", subtitle: "Fast pickup order", icon: "🛍️", bg: "linear-gradient(135deg,#38bdf8,#2563eb)", shadow: "rgba(37,99,235,.38)", animation: "bagAnim" },
-  { number: 3, key: "delivery", modeKey: "delivery", name: "Delivery", subtitle: "Rider dispatch", icon: "🛵", bg: "linear-gradient(135deg,#fde047,#f97316)", shadow: "rgba(249,115,22,.38)", animation: "deliveryAnim" },
-  { number: 4, key: "dine_in", modeKey: "dine_in", name: "Dine In", subtitle: "Tables & waiter", icon: "🍽️", bg: "linear-gradient(135deg,#fb7185,#ef4444)", shadow: "rgba(239,68,68,.38)", animation: "dineAnim" },
-  { number: 5, key: "drive_thru", modeKey: "drive_thru", name: "Drive Thru", subtitle: "Vehicle order", icon: "🚗", bg: "linear-gradient(135deg,#4ade80,#16a34a)", shadow: "rgba(22,163,74,.38)", animation: "driveAnim" },
-  { number: 6, key: "kiosk", modeKey: "kiosk", name: "Kiosk", subtitle: "Self ordering", icon: "☝️", bg: "linear-gradient(135deg,#ffe4e6,#f9a8d4)", shadow: "rgba(244,114,182,.35)", animation: "tapAnim", dark: true }
+  {
+    number: 1,
+    key: "walk_in",
+    modeKey: "walk_in",
+    name: "Walk In",
+    subtitle: "Counter customer",
+    icon: "🚶",
+    bg: "linear-gradient(135deg,#18181b,#020617)",
+    shadow: "rgba(15,23,42,.45)",
+    animation: "walkAnim"
+  },
+  {
+    number: 2,
+    key: "take_away",
+    modeKey: "take_away",
+    name: "Take Away",
+    subtitle: "Fast pickup order",
+    icon: "🛍️",
+    bg: "linear-gradient(135deg,#38bdf8,#2563eb)",
+    shadow: "rgba(37,99,235,.38)",
+    animation: "bagAnim"
+  },
+  {
+    number: 3,
+    key: "delivery",
+    modeKey: "delivery",
+    name: "Delivery",
+    subtitle: "Rider dispatch",
+    icon: "🛵",
+    bg: "linear-gradient(135deg,#fde047,#f97316)",
+    shadow: "rgba(249,115,22,.38)",
+    animation: "deliveryAnim"
+  },
+  {
+    number: 4,
+    key: "dine_in",
+    modeKey: "dine_in",
+    name: "Dine In",
+    subtitle: "Tables & waiter",
+    icon: "🍽️",
+    bg: "linear-gradient(135deg,#fb7185,#ef4444)",
+    shadow: "rgba(239,68,68,.38)",
+    animation: "dineAnim"
+  },
+  {
+    number: 5,
+    key: "drive_thru",
+    modeKey: "drive_thru",
+    name: "Drive Thru",
+    subtitle: "Vehicle order",
+    icon: "🚗",
+    bg: "linear-gradient(135deg,#4ade80,#16a34a)",
+    shadow: "rgba(22,163,74,.38)",
+    animation: "driveAnim"
+  },
+  {
+    number: 6,
+    key: "kiosk",
+    modeKey: "kiosk",
+    name: "Kiosk",
+    subtitle: "Self ordering",
+    icon: "☝️",
+    bg: "linear-gradient(135deg,#ffe4e6,#f9a8d4)",
+    shadow: "rgba(244,114,182,.35)",
+    animation: "tapAnim",
+    dark: true
+  }
 ];
 
 const bottomModules = [
@@ -40,6 +101,8 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
     activeTables: 0,
     pendingKitchenOrders: 0
   });
+  const [demoSeeding, setDemoSeeding] = useState(false);
+  const [demoStatus, setDemoStatus] = useState("");
 
   useEffect(() => {
     const timer = setInterval(() => setClock(new Date()), 30000);
@@ -63,6 +126,40 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
   useEffect(() => {
     loadStats();
   }, []);
+
+  async function seedDemoData() {
+    const ok = window.confirm(
+      "This will refresh demo menu, staff, customers and tables for this restaurant. Continue?"
+    );
+
+    if (!ok) return;
+
+    setDemoSeeding(true);
+    setDemoStatus("Seeding demo data...");
+
+    try {
+      const res = await api(token).post("/api/demo-polish/seed");
+
+      setDemoStatus(
+        `Demo ready: ${res.data?.menuItems || 0} menu items, ${res.data?.staff || 0} staff, ${res.data?.customers || 0} customers, ${res.data?.tables || 0} tables.`
+      );
+
+      await loadStats();
+
+      alert(
+        res.data?.message ||
+          "Demo data seeded successfully. Open Menu, Staff, Customers and Dine In to view demo content."
+      );
+    } catch (error) {
+      setDemoStatus("Demo seed failed.");
+      alert(
+        error.response?.data?.message ||
+          "Demo seed failed. Make sure backend demo-polish route is deployed on Render."
+      );
+    } finally {
+      setDemoSeeding(false);
+    }
+  }
 
   const topStats = useMemo(
     () => [
@@ -115,7 +212,7 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
             overflow-y: auto;
             padding: 18px 24px 16px;
             display: grid;
-            grid-template-rows: auto 1fr auto;
+            grid-template-rows: auto auto 1fr auto;
             gap: 18px;
             background:
               radial-gradient(circle at 12% 22%, rgba(88,28,135,.95), transparent 30%),
@@ -139,7 +236,7 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
             position: relative;
             z-index: 2;
             display: grid;
-            grid-template-columns: 335px minmax(360px, 1fr) 355px;
+            grid-template-columns: 335px minmax(360px, 1fr) 430px;
             gap: 18px;
             align-items: stretch;
           }
@@ -251,7 +348,7 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
 
           .user-panel {
             display: grid;
-            grid-template-columns: 60px 1fr 58px;
+            grid-template-columns: 60px 1fr 54px;
             align-items: center;
             gap: 12px;
             padding: 15px;
@@ -269,6 +366,10 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
             background: rgba(255,255,255,.96);
             font-size: 28px;
             position: relative;
+          }
+
+          .notify-btn {
+            cursor: pointer;
           }
 
           .notify-dot {
@@ -306,6 +407,68 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
 
           .branch-select option {
             color: #111827;
+          }
+
+          .demo-control-panel {
+            position: relative;
+            z-index: 2;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 14px;
+            align-items: center;
+            padding: 14px 16px;
+            border-radius: 26px;
+            background:
+              radial-gradient(circle at top left, rgba(250,204,21,.16), transparent 32%),
+              rgba(15,23,42,.25);
+            border: 1px solid rgba(255,255,255,.13);
+            backdrop-filter: blur(18px);
+            box-shadow: 0 24px 58px rgba(0,0,0,.16);
+          }
+
+          .demo-control-panel h2 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 1000;
+          }
+
+          .demo-control-panel p {
+            margin: 5px 0 0;
+            color: rgba(255,255,255,.74);
+            font-size: 13px;
+            font-weight: 750;
+          }
+
+          .demo-status {
+            margin-top: 7px;
+            color: #fde68a;
+            font-size: 12px;
+            font-weight: 850;
+          }
+
+          .demo-seed-btn {
+            min-height: 48px;
+            border: 0;
+            border-radius: 16px;
+            background: linear-gradient(135deg,#facc15,#f97316);
+            color: #111827;
+            font-weight: 1000;
+            cursor: pointer;
+            padding: 0 17px;
+            box-shadow: 0 15px 34px rgba(249,115,22,.28);
+            transition: .18s ease;
+            white-space: nowrap;
+          }
+
+          .demo-seed-btn:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.05);
+          }
+
+          .demo-seed-btn:disabled {
+            opacity: .65;
+            cursor: not-allowed;
+            transform: none;
           }
 
           .epos-center {
@@ -517,8 +680,9 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
               padding: 12px;
             }
 
-            .stats-strip {
-              grid-template-columns: repeat(2, 1fr);
+            .stats-strip,
+            .demo-control-panel {
+              grid-template-columns: 1fr;
             }
 
             .main-mode-grid {
@@ -596,6 +760,21 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
             <span className="notify-dot">1</span>
           </button>
         </div>
+      </section>
+
+      <section className="demo-control-panel">
+        <div>
+          <h2>Demo Control Center</h2>
+          <p>
+            One click fills this restaurant with demo menu items, customers, staff members,
+            riders, waiters, and editable dine-in tables.
+          </p>
+          {demoStatus ? <div className="demo-status">{demoStatus}</div> : null}
+        </div>
+
+        <button className="demo-seed-btn" type="button" onClick={seedDemoData} disabled={demoSeeding}>
+          {demoSeeding ? "Seeding..." : "✨ Seed Demo Data"}
+        </button>
       </section>
 
       <main className="epos-center">
