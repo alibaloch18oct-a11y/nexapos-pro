@@ -2353,6 +2353,28 @@ export default function POSScreen({ token, module, session, onBack }) {
             }
           }
 
+          
+          .pos-service-staff-panel {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 12px;
+          }
+
+          .pos-selected-staff {
+            margin-top: 7px;
+            padding: 8px 10px;
+            border-radius: 13px;
+            background: rgba(168,85,247,.10);
+            border: 1px solid rgba(168,85,247,.16);
+            color: #ddd6fe;
+            font-size: 12px;
+            font-weight: 850;
+          }
+
+          .pos-input option {
+            color: #111827;
+          }
+
           @media (max-width: 1280px) {
             .pro-pos-layout {
               grid-template-columns: 260px 1fr;
@@ -2760,6 +2782,7 @@ export default function POSScreen({ token, module, session, onBack }) {
     </div>
   );
 }
+
 
 
 
