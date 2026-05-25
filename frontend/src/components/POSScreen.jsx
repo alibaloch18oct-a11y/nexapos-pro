@@ -277,25 +277,25 @@ function paymentMeta(method) {
   const key = String(method || "").toLowerCase();
 
   if (key.includes("cash")) {
-    return { icon: "??", title: "Cash", subtitle: "Cash Payment", bg: "linear-gradient(135deg,#22c55e,#16a34a)" };
+    return { icon: "CASH", title: "Cash", subtitle: "Cash Payment", bg: "linear-gradient(135deg,#22c55e,#16a34a)" };
   }
   if (key.includes("card")) {
-    return { icon: "??", title: "Card", subtitle: "POS / Visa / Master", bg: "linear-gradient(135deg,#3b82f6,#1d4ed8)" };
+    return { icon: "CARD", title: "Card", subtitle: "POS / Visa / Master", bg: "linear-gradient(135deg,#3b82f6,#1d4ed8)" };
   }
   if (key.includes("easy")) {
-    return { icon: "??", title: "Easypaisa", subtitle: "Wallet Payment", bg: "linear-gradient(135deg,#16a34a,#0f766e)" };
+    return { icon: "EASY", title: "Easypaisa", subtitle: "Wallet Payment", bg: "linear-gradient(135deg,#16a34a,#0f766e)" };
   }
   if (key.includes("jazz")) {
-    return { icon: "??", title: "JazzCash", subtitle: "Mobile Wallet", bg: "linear-gradient(135deg,#ef4444,#b91c1c)" };
+    return { icon: "JAZZ", title: "JazzCash", subtitle: "Mobile Wallet", bg: "linear-gradient(135deg,#ef4444,#b91c1c)" };
   }
   if (key.includes("bank")) {
-    return { icon: "??", title: "Bank", subtitle: "Bank Transfer", bg: "linear-gradient(135deg,#9333ea,#6d28d9)" };
+    return { icon: "BANK", title: "Bank", subtitle: "Bank Transfer", bg: "linear-gradient(135deg,#9333ea,#6d28d9)" };
   }
   if (key.includes("complimentary")) {
-    return { icon: "??", title: "Complimentary", subtitle: "Free / VIP", bg: "linear-gradient(135deg,#f59e0b,#ea580c)" };
+    return { icon: "VIP", title: "Complimentary", subtitle: "Free / VIP", bg: "linear-gradient(135deg,#f59e0b,#ea580c)" };
   }
 
-  return { icon: "??", title: method, subtitle: "Payment Method", bg: "linear-gradient(135deg,#475569,#0f172a)" };
+  return { icon: "PAY", title: method, subtitle: "Payment Method", bg: "linear-gradient(135deg,#475569,#0f172a)" };
 }
 
 function StaffSelect({ label, value, onChange, options, placeholder }) {
@@ -2644,7 +2644,7 @@ export default function POSScreen({ token, module, session, onBack }) {
           />
 
           <div className="pos-title-card">
-            <div style={{ fontWeight: 950 }}>?? Tax & Charges</div>
+            <div style={{ fontWeight: 950 }}>Tax & Charges</div>
             <div className="pos-small-muted" style={{ marginTop: 8 }}>
               {settings.taxName || "GST"} {settings.taxPercent || 0}%  {settings.serviceChargeName || "Service"} {settings.serviceChargePercent || 0}%
             </div>
@@ -2776,7 +2776,7 @@ export default function POSScreen({ token, module, session, onBack }) {
             {cart.length === 0 ? (
               <div className="pos-empty-cart">
                 <div>
-                  <div style={{ fontSize: 52 }}>??</div>
+                  <div style={{ fontSize: 52 }}>•</div>
                   <h3>Cart is empty</h3>
                   <p>Select menu items to start order.</p>
                 </div>
@@ -2920,6 +2920,7 @@ export default function POSScreen({ token, module, session, onBack }) {
     </div>
   );
 }
+
 
 
 

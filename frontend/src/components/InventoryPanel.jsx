@@ -564,3 +564,4 @@ export default function InventoryPanel({ token, session, onBack }) {
     </div>
   );
 }
+

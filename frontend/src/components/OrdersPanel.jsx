@@ -505,7 +505,7 @@ function OrderCard({ order, onView, onPrint, onEdit, onCancel, onPay }) {
           <h3>{order.orderNo || "Order"}</h3>
           <p>{formatDate(order.createdAt || order.date)}</p>
         </div>
-        <div className="orders-card-icon">??</div>
+        <div className="orders-card-icon">•</div>
       </div>
 
       <div className={`orders-card-payment-top ${paymentBadge(order).cls}`}>
@@ -1397,6 +1397,7 @@ export default function OrdersPanel({ token, onBack }) {
     </div>
   );
 }
+
 
 
 

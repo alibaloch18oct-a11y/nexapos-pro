@@ -494,3 +494,4 @@ export default function MenuInventoryMappingPanel({ token, session, onBack }) {
     </div>
   );
 }
+

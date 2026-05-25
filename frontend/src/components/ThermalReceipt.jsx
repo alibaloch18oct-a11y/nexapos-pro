@@ -649,3 +649,4 @@ export default function ThermalReceipt({ order, settings, onClose }) {
   );
 }
 
+
