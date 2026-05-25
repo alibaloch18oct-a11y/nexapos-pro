@@ -109,90 +109,90 @@ const demoCatalog = [
     name: "Burgers",
     colors: ["#f97316", "#ef4444"],
     products: [
-      ["Zinger Burger", "Crispy fillet with mayo and lettuce", 650, "??"],
-      ["Beef Smash Burger", "Double patty with cheese", 890, "??"],
-      ["Chicken Cheese Burger", "Grilled chicken and cheddar", 740, "??"],
-      ["Jalapeno Burger", "Spicy jalapeno and sauce", 780, "???"]
+      ["Zinger Burger", "Crispy fillet with mayo and lettuce", 650, "•"],
+      ["Beef Smash Burger", "Double patty with cheese", 890, "•"],
+      ["Chicken Cheese Burger", "Grilled chicken and cheddar", 740, "•"],
+      ["Jalapeno Burger", "Spicy jalapeno and sauce", 780, "•"]
     ]
   },
   {
     name: "Pizza",
     colors: ["#f59e0b", "#dc2626"],
     products: [
-      ["Chicken Fajita Pizza", "Loaded with spicy fajita chicken", 1390, "??"],
-      ["Pepperoni Pizza", "Classic pepperoni and mozzarella", 1550, "??"],
-      ["Crown Crust Pizza", "Premium crown crust special", 1790, "??"],
-      ["Cheese Lovers Pizza", "Extra cheese delight", 1490, "??"]
+      ["Chicken Fajita Pizza", "Loaded with spicy fajita chicken", 1390, "•"],
+      ["Pepperoni Pizza", "Classic pepperoni and mozzarella", 1550, "•"],
+      ["Crown Crust Pizza", "Premium crown crust special", 1790, "•"],
+      ["Cheese Lovers Pizza", "Extra cheese delight", 1490, "•"]
     ]
   },
   {
     name: "Broast",
     colors: ["#eab308", "#f97316"],
     products: [
-      ["Chicken Broast 2 Pc", "Crispy golden fried chicken", 560, "??"],
-      ["Chicken Broast 4 Pc", "Family size crispy chicken", 1090, "??"],
-      ["Chicken Strips", "Crunchy boneless strips", 680, "??"],
-      ["Spicy Wings", "Hot crispy wings", 590, "??"]
+      ["Chicken Broast 2 Pc", "Crispy golden fried chicken", 560, "•"],
+      ["Chicken Broast 4 Pc", "Family size crispy chicken", 1090, "•"],
+      ["Chicken Strips", "Crunchy boneless strips", 680, "•"],
+      ["Spicy Wings", "Hot crispy wings", 590, "•"]
     ]
   },
   {
     name: "BBQ",
     colors: ["#10b981", "#f97316"],
     products: [
-      ["Chicken Tikka", "Charcoal tikka piece", 490, "??"],
-      ["Malai Boti", "Creamy boneless bbq", 980, "??"],
-      ["Seekh Kabab", "Juicy seekh kabab", 620, "??"],
-      ["Chicken Bihari Boti", "Tender spicy bihari boti", 1040, "??"]
+      ["Chicken Tikka", "Charcoal tikka piece", 490, "•"],
+      ["Malai Boti", "Creamy boneless bbq", 980, "•"],
+      ["Seekh Kabab", "Juicy seekh kabab", 620, "•"],
+      ["Chicken Bihari Boti", "Tender spicy bihari boti", 1040, "•"]
     ]
   },
   {
     name: "Rice",
     colors: ["#16a34a", "#65a30d"],
     products: [
-      ["Chicken Biryani", "Traditional spicy biryani", 430, "??"],
-      ["Mutton Pulao", "Fragrant pulao with mutton", 780, "??"],
-      ["Chicken Fried Rice", "Chinese style fried rice", 620, "??"],
-      ["Thai Rice Bowl", "Rice bowl with sauce", 710, "??"]
+      ["Chicken Biryani", "Traditional spicy biryani", 430, "•"],
+      ["Mutton Pulao", "Fragrant pulao with mutton", 780, "•"],
+      ["Chicken Fried Rice", "Chinese style fried rice", 620, "•"],
+      ["Thai Rice Bowl", "Rice bowl with sauce", 710, "•"]
     ]
   },
   {
     name: "Karahi",
     colors: ["#dc2626", "#ea580c"],
     products: [
-      ["Chicken Karahi Half", "Fresh karahi half", 1390, "??"],
-      ["Chicken Karahi Full", "Family size karahi", 2490, "??"],
-      ["Mutton Karahi Half", "Premium mutton karahi", 2090, "??"],
-      ["White Karahi", "Creamy white karahi", 1590, "??"]
+      ["Chicken Karahi Half", "Fresh karahi half", 1390, "•"],
+      ["Chicken Karahi Full", "Family size karahi", 2490, "•"],
+      ["Mutton Karahi Half", "Premium mutton karahi", 2090, "•"],
+      ["White Karahi", "Creamy white karahi", 1590, "•"]
     ]
   },
   {
     name: "Drinks",
     colors: ["#06b6d4", "#2563eb"],
     products: [
-      ["Mint Margarita", "Refreshing mint cooler", 290, "??"],
+      ["Mint Margarita", "Refreshing mint cooler", 290, "•"],
       ["Cold Coffee", "Creamy iced coffee", 430, "?"],
-      ["Fresh Lime", "Sweet and salty lime", 240, "??"],
-      ["Soft Drink Can", "Chilled beverage can", 180, "??"]
+      ["Fresh Lime", "Sweet and salty lime", 240, "•"],
+      ["Soft Drink Can", "Chilled beverage can", 180, "•"]
     ]
   },
   {
     name: "Desserts",
     colors: ["#ec4899", "#8b5cf6"],
     products: [
-      ["Chocolate Brownie", "Warm brownie with chocolate", 390, "??"],
-      ["Cheesecake Slice", "Creamy cheesecake", 520, "??"],
-      ["Lava Cake", "Molten chocolate center", 490, "??"],
-      ["Ice Cream Cup", "Vanilla ice cream cup", 260, "??"]
+      ["Chocolate Brownie", "Warm brownie with chocolate", 390, "•"],
+      ["Cheesecake Slice", "Creamy cheesecake", 520, "•"],
+      ["Lava Cake", "Molten chocolate center", 490, "•"],
+      ["Ice Cream Cup", "Vanilla ice cream cup", 260, "•"]
     ]
   },
   {
     name: "Combos",
     colors: ["#0f766e", "#0ea5e9"],
     products: [
-      ["Burger Combo", "Burger + fries + drink", 980, "??"],
-      ["Pizza Combo", "Mini pizza + drink", 1160, "??"],
-      ["Family Box", "Chicken, fries and drinks", 2890, "??"],
-      ["Kids Combo", "Mini burger + juice", 590, "??"]
+      ["Burger Combo", "Burger + fries + drink", 980, "•"],
+      ["Pizza Combo", "Mini pizza + drink", 1160, "•"],
+      ["Family Box", "Chicken, fries and drinks", 2890, "•"],
+      ["Kids Combo", "Mini burger + juice", 590, "•"]
     ]
   }
 ];
@@ -220,16 +220,16 @@ const demoItems = demoCatalog.flatMap((group, groupIndex) =>
 
 function categoryEmoji(category) {
   const key = String(category || "").toLowerCase();
-  if (key.includes("burger")) return "??";
-  if (key.includes("pizza")) return "??";
-  if (key.includes("bbq")) return "??";
-  if (key.includes("rice")) return "??";
-  if (key.includes("drink")) return "??";
-  if (key.includes("dessert")) return "??";
-  if (key.includes("broast")) return "??";
-  if (key.includes("karahi")) return "??";
-  if (key.includes("combo")) return "??";
-  return "???";
+  if (key.includes("burger")) return "B";
+  if (key.includes("pizza")) return "P";
+  if (key.includes("bbq")) return "BBQ";
+  if (key.includes("rice")) return "R";
+  if (key.includes("drink")) return "D";
+  if (key.includes("dessert")) return "S";
+  if (key.includes("broast")) return "BR";
+  if (key.includes("karahi")) return "K";
+  if (key.includes("combo")) return "C";
+  return "POS";
 }
 
 function paletteFromName(text) {
@@ -277,25 +277,25 @@ function paymentMeta(method) {
   const key = String(method || "").toLowerCase();
 
   if (key.includes("cash")) {
-    return { icon: "CASH", title: "Cash", subtitle: "Cash Payment", bg: "linear-gradient(135deg,#22c55e,#16a34a)" };
+    return { icon: "Rs", title: "Cash", subtitle: "Cash Payment", bg: "linear-gradient(135deg,#22c55e,#16a34a)" };
   }
   if (key.includes("card")) {
-    return { icon: "CARD", title: "Card", subtitle: "POS / Visa / Master", bg: "linear-gradient(135deg,#3b82f6,#1d4ed8)" };
+    return { icon: "CC", title: "Card", subtitle: "POS / Visa / Master", bg: "linear-gradient(135deg,#3b82f6,#1d4ed8)" };
   }
   if (key.includes("easy")) {
-    return { icon: "EASY", title: "Easypaisa", subtitle: "Wallet Payment", bg: "linear-gradient(135deg,#16a34a,#0f766e)" };
+    return { icon: "EP", title: "Easypaisa", subtitle: "Wallet Payment", bg: "linear-gradient(135deg,#16a34a,#0f766e)" };
   }
   if (key.includes("jazz")) {
-    return { icon: "JAZZ", title: "JazzCash", subtitle: "Mobile Wallet", bg: "linear-gradient(135deg,#ef4444,#b91c1c)" };
+    return { icon: "JC", title: "JazzCash", subtitle: "Mobile Wallet", bg: "linear-gradient(135deg,#ef4444,#b91c1c)" };
   }
   if (key.includes("bank")) {
-    return { icon: "BANK", title: "Bank", subtitle: "Bank Transfer", bg: "linear-gradient(135deg,#9333ea,#6d28d9)" };
+    return { icon: "BK", title: "Bank", subtitle: "Bank Transfer", bg: "linear-gradient(135deg,#9333ea,#6d28d9)" };
   }
   if (key.includes("complimentary")) {
     return { icon: "VIP", title: "Complimentary", subtitle: "Free / VIP", bg: "linear-gradient(135deg,#f59e0b,#ea580c)" };
   }
 
-  return { icon: "PAY", title: method, subtitle: "Payment Method", bg: "linear-gradient(135deg,#475569,#0f172a)" };
+  return { icon: "PY", title: method, subtitle: "Payment Method", bg: "linear-gradient(135deg,#475569,#0f172a)" };
 }
 
 function StaffSelect({ label, value, onChange, options, placeholder }) {
@@ -2527,14 +2527,14 @@ export default function POSScreen({ token, module, session, onBack }) {
           </div>
 
           <div className="pos-chip-wrap">
-            <div className="pos-chip">?? {cart.length} Items</div>
-            <div className="pos-chip">?? {visibleItems.length} Visible</div>
-            <div className="pos-chip">?? {menuItems.length} Menu Items</div>
+            <div className="pos-chip">{cart.length} Items</div>
+            <div className="pos-chip">{visibleItems.length} Visible</div>
+            <div className="pos-chip">{menuItems.length} Menu Items</div>
           </div>
 
           {driveThruTicket ? (
             <div className="pos-title-card">
-              <div style={{ fontWeight: 950 }}>?? {driveThruTicket.tokenNo}</div>
+              <div style={{ fontWeight: 950 }}>Token {driveThruTicket.tokenNo}</div>
               <div className="pos-small-muted" style={{ marginTop: 8 }}>
                 {driveThruTicket.vehicleNo || "No vehicle no"}  {driveThruTicket.vehicleColor || "No color"}  {driveThruTicket.vehicleType || "Vehicle"}
               </div>
@@ -2608,7 +2608,7 @@ export default function POSScreen({ token, module, session, onBack }) {
 
           {loyaltyCustomer ? (
             <div className="pos-title-card">
-              <div style={{ fontWeight: 950 }}>?? Loyalty Customer</div>
+              <div style={{ fontWeight: 950 }}>Loyalty Customer</div>
               <div className="pos-small-muted" style={{ marginTop: 8 }}>
                 {loyaltyCustomer.name}  {loyaltyCustomer.loyaltyPoints || 0} points
               </div>
@@ -2695,7 +2695,7 @@ export default function POSScreen({ token, module, session, onBack }) {
             {visibleItems.length === 0 ? (
               <div className="pos-empty-cart">
                 <div>
-                  <div style={{ fontSize: 56 }}>???</div>
+                  <div style={{ fontSize: 28, fontWeight: 1000 }}>EMPTY</div>
                   <h3>No items found</h3>
                   <p>Try another category or search keyword.</p>
                 </div>
@@ -2920,6 +2920,7 @@ export default function POSScreen({ token, module, session, onBack }) {
     </div>
   );
 }
+
 
 
 
