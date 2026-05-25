@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 
 const moduleLabels = {
@@ -98,7 +98,7 @@ function EditUserModal({ user, packages, allModules, onClose, onSave, saving }) 
             <p>Edit login, package, days, expiry and enabled modules.</p>
           </div>
 
-          <button className="sa-icon-btn" onClick={onClose}>✕</button>
+          <button className="sa-icon-btn" onClick={onClose}>âœ•</button>
         </div>
 
         <div className="sa-edit-grid">
@@ -201,7 +201,7 @@ function EditUserModal({ user, packages, allModules, onClose, onSave, saving }) 
                   className={`sa-module-chip ${form.enabledModules.includes(moduleKey) ? "active" : ""}`}
                   onClick={() => toggleModule(moduleKey)}
                 >
-                  {form.enabledModules.includes(moduleKey) ? "✓" : "+"} {moduleLabels[moduleKey] || moduleKey}
+                  {form.enabledModules.includes(moduleKey) ? "âœ“" : "+"} {moduleLabels[moduleKey] || moduleKey}
                 </button>
               ))}
             </div>
@@ -229,7 +229,7 @@ function UserCard({ user, onEdit, onToggle }) {
       <div className="sa-user-top">
         <div>
           <h3>{user.restaurantName || user.tenant?.restaurantName || user.username}</h3>
-          <p>{user.username} · {user.email || "No email"}</p>
+          <p>{user.username} Â· {user.email || "No email"}</p>
         </div>
 
         <span className={`sa-status ${tone.cls}`}>{tone.label}</span>

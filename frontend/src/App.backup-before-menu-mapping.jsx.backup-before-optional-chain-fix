@@ -21,10 +21,6 @@ import SubscriptionPanel from "./components/SubscriptionPanel";
 import AnalyticsPanel from "./components/AnalyticsPanel";
 import StockMovementPanel from "./components/StockMovementPanel";
 import MenuInventoryMappingPanel from "./components/MenuInventoryMappingPanel";
-import SupplierPurchasePanel from "./components/SupplierPurchasePanel";
-import ExpensePanel from "./components/ExpensePanel";
-import CustomerPanel from "./components/CustomerPanel";
-import DriveThruPanel from "./components/DriveThruPanel";
 
 function LoadingScreen() {
   return (
@@ -146,60 +142,44 @@ function App() {
     return <SubscriptionPanel token={token} onBack={closeModule} />;
   }
 
-  if (activeModule?.key === "drive_thru_queue") {
-    return (
-      <DriveThruPanel
-        token={token}
-        session={session}
-        onBack={closeModule}
-        onOpenPOS={(ticket) =>
-          setActiveModule({
-            key: "drive_thru",
-            modeKey: "drive_thru",
-            name: `Drive Thru - ${ticket.tokenNo}`,
-            driveThruTicket: ticket
-          })
-        }
-      />
-    );
-  }
-
-  if (activeModule?.key === "customers" || activeModule?.key === "loyalty") {
-    return <CustomerPanel token={token} session={session} onBack={closeModule} />;
-  }
-
-  if (activeModule?.key === "expenses" || activeModule?.key === "expense_management") {
-    return <ExpensePanel token={token} session={session} onBack={closeModule} />;
-  }
-
   if (
     activeModule?.key === "analytics" ||
     activeModule?.key === "reports" ||
     activeModule?.key === "profit_loss"
   ) {
-    return <AnalyticsPanel token={token} session={session} onBack={closeModule} />;
-  }
-
-  if (
-    activeModule?.key === "supplier_purchases" ||
-    activeModule?.key === "suppliers" ||
-    activeModule?.key === "purchase_stock"
-  ) {
-    return <SupplierPurchasePanel token={token} session={session} onBack={closeModule} />;
+    return (
+      <AnalyticsPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
   }
 
   if (
     activeModule?.key === "menu_inventory_mapping" ||
     activeModule?.key === "recipe_mapping"
   ) {
-    return <MenuInventoryMappingPanel token={token} session={session} onBack={closeModule} />;
+    return (
+      <MenuInventoryMappingPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
   }
 
   if (
     activeModule?.key === "stock_movements" ||
     activeModule?.key === "stock_history"
   ) {
-    return <StockMovementPanel token={token} session={session} onBack={closeModule} />;
+    return (
+      <StockMovementPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
   }
 
   if (activeModule?.key === "orders") {
@@ -211,7 +191,13 @@ function App() {
   }
 
   if (activeModule?.key === "settings") {
-    return <MenuAdminPanel token={token} session={session} onBack={closeModule} />;
+    return (
+      <MenuAdminPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
   }
 
   if (
@@ -219,25 +205,47 @@ function App() {
     activeModule?.key === "branding" ||
     activeModule?.key === "receipt_settings"
   ) {
-    return <RestaurantSettingsPanel token={token} session={session} onBack={closeModule} />;
+    return (
+      <RestaurantSettingsPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
   }
 
   if (activeModule?.key === "inventory") {
-    return <InventoryPanel token={token} session={session} onBack={closeModule} />;
+    return (
+      <InventoryPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
   }
 
   if (activeModule?.key === "discounts" || activeModule?.key === "discount") {
-    return <DiscountPanel token={token} session={session} onBack={closeModule} />;
+    return (
+      <DiscountPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
   }
 
   if (
     activeModule?.key === "staff" ||
     activeModule?.key === "waiters" ||
-    activeModule?.key === "riders" ||
-    activeModule?.key === "cashier" ||
-    activeModule?.key === "attendance"
+    activeModule?.key === "riders"
   ) {
-    return <StaffPanel token={token} session={session} onBack={closeModule} />;
+    return (
+      <StaffPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
   }
 
   if (activeModule?.key === "dine_in") {
@@ -269,13 +277,7 @@ function App() {
     );
   }
 
-  if (
-    activeModule?.key === "walk_in" ||
-    activeModule?.key === "kiosk" ||
-    activeModule?.key === "take_away" ||
-    activeModule?.key === "delivery" ||
-    activeModule?.key === "drive_thru"
-  ) {
+  if (activeModule && posModuleKeys.includes(activeModule.key)) {
     return (
       <POSScreen
         token={token}
@@ -284,10 +286,6 @@ function App() {
         onBack={closeModule}
       />
     );
-  }
-
-  if (activeModule && posModuleKeys.includes(activeModule.key)) {
-    return <POSScreen token={token} module={activeModule} session={session} onBack={closeModule} />;
   }
 
   return (

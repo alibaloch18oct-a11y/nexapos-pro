@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   BadgeDollarSign,
   Box,
@@ -470,7 +470,7 @@ export default function PackageBuilderPanel({ token, onBack }) {
                       <option value="">Select client</option>
                       {tenants.map((tenant) => (
                         <option key={tenant.id} value={tenant.id}>
-                          {tenant.restaurantName} · {tenant.ownerName}
+                          {tenant.restaurantName} Â· {tenant.ownerName}
                         </option>
                       ))}
                     </select>
@@ -497,7 +497,7 @@ export default function PackageBuilderPanel({ token, onBack }) {
                       <option value="">Select package</option>
                       {packages.filter((plan) => plan.isActive !== false).map((plan) => (
                         <option key={plan.id} value={plan.id}>
-                          {plan.name} · Rs {plan.monthlyPrice}/month
+                          {plan.name} Â· Rs {plan.monthlyPrice}/month
                         </option>
                       ))}
                     </select>
@@ -542,8 +542,8 @@ export default function PackageBuilderPanel({ token, onBack }) {
                 >
                   <strong>{selectedPackageForAssign.name}</strong>
                   <p className="nexa-small">
-                    Monthly Rs {selectedPackageForAssign.monthlyPrice} · Yearly Rs {selectedPackageForAssign.yearlyPrice} ·
-                    Users {selectedPackageForAssign.maxUsers} · Branches {selectedPackageForAssign.maxBranches}
+                    Monthly Rs {selectedPackageForAssign.monthlyPrice} Â· Yearly Rs {selectedPackageForAssign.yearlyPrice} Â·
+                    Users {selectedPackageForAssign.maxUsers} Â· Branches {selectedPackageForAssign.maxBranches}
                   </p>
 
                   <ModuleSelector

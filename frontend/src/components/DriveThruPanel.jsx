@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   Car,
   CheckCircle2,
@@ -147,7 +147,7 @@ function TicketCard({ ticket, onEdit, onDelete, onStatus, onOpenPOS }) {
 
           <div style={{ display: "flex", gap: 9, alignItems: "center", color: "#cbd5e1" }}>
             <ShieldCheck size={16} color="#a5f3fc" />
-            Vehicle: {ticket.vehicleNo || "N/A"} · {ticket.vehicleColor || "No color"}
+            Vehicle: {ticket.vehicleNo || "N/A"} Â· {ticket.vehicleColor || "No color"}
           </div>
         </div>
 

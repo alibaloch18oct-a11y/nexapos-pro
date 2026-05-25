@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 
 const defaultSettings = {
@@ -557,7 +557,7 @@ export default function RestaurantSettingsPanel({ token, session, onBack }) {
 
       <div className="settings-head">
         <div>
-          <button className="settings-back" onClick={onBack}>← Back</button>
+          <button className="settings-back" onClick={onBack}>â† Back</button>
           <h1 className="settings-title">Restaurant Settings</h1>
           <p className="settings-sub">
             Receipt designer, tax, service charges, branding and bill print settings.
@@ -604,7 +604,7 @@ export default function RestaurantSettingsPanel({ token, session, onBack }) {
                     <option value="PKR">PKR</option>
                     <option value="$">$</option>
                     <option value="AED">AED</option>
-                    <option value="£">£</option>
+                    <option value="Â£">Â£</option>
                   </select>
                 </Field>
               </div>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { CircleDollarSign, Printer, ReceiptText, X } from "lucide-react";
 import { paymentMethods, tableSplitItems } from "../lib/data";
@@ -65,7 +65,7 @@ export default function ReceiptModal({ table, mode = "settle", onClose, onPaid }
               {mode === "print" ? "Print Bill Preview" : "Settle Table Payment"}
             </h2>
             <p className="nexa-section-sub">
-              Table {table?.name} · Order {table?.orderNo || "#NEW"} · Staff {table?.staff || "Staff"}
+              Table {table?.name} Â· Order {table?.orderNo || "#NEW"} Â· Staff {table?.staff || "Staff"}
             </p>
           </div>
 

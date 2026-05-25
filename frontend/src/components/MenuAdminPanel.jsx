@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
   CircleDollarSign,
@@ -39,7 +39,7 @@ const emptyItem = {
   subtitle: "",
   price: "",
   discount: "",
-  emoji: "🍽️",
+  emoji: "ðŸ½ï¸",
   sku: "",
   imageUrl: "",
   isActive: true,
@@ -98,7 +98,7 @@ export default function MenuAdminPanel({ token, session, onBack }) {
       subtitle: item.subtitle || "",
       price: String(item.price || ""),
       discount: item.discount || "",
-      emoji: item.emoji || "🍽️",
+      emoji: item.emoji || "ðŸ½ï¸",
       sku: item.sku || "",
       imageUrl: item.imageUrl || "",
       isActive: item.isActive !== false,
@@ -167,7 +167,7 @@ export default function MenuAdminPanel({ token, session, onBack }) {
       subtitle: itemForm.subtitle,
       price: Number(itemForm.price || 0),
       discount: itemForm.discount,
-      emoji: itemForm.emoji || "🍽️",
+      emoji: itemForm.emoji || "ðŸ½ï¸",
       sku: itemForm.sku,
       imageUrl: itemForm.imageUrl,
       isActive: itemForm.isActive,
@@ -283,7 +283,7 @@ export default function MenuAdminPanel({ token, session, onBack }) {
                     }}
                   >
                     <strong>{category.name}</strong>
-                    <p className="nexa-small">{count} items · {category.isActive ? "Active" : "Hidden"}</p>
+                    <p className="nexa-small">{count} items Â· {category.isActive ? "Active" : "Hidden"}</p>
                   </button>
 
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
@@ -340,7 +340,7 @@ export default function MenuAdminPanel({ token, session, onBack }) {
                     fontSize: 58
                   }}
                 >
-                  {item.emoji || "🍽️"}
+                  {item.emoji || "ðŸ½ï¸"}
                 </div>
 
                 <div style={{ padding: 14 }}>
@@ -458,7 +458,7 @@ export default function MenuAdminPanel({ token, session, onBack }) {
               textAlign: "center"
             }}
           >
-            <div style={{ fontSize: 46 }}>{itemForm.emoji || "🍽️"}</div>
+            <div style={{ fontSize: 46 }}>{itemForm.emoji || "ðŸ½ï¸"}</div>
             <h3 style={{ margin: "6px 0" }}>{itemForm.name || "Preview Item"}</h3>
             <p className="nexa-small">{itemForm.subtitle || "Description preview"}</p>
             <strong style={{ fontSize: 28 }}>

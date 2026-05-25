@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadgePercent,
   BarChart3,
   Bike,
@@ -56,18 +56,18 @@ export const filters = [
 ];
 
 export const demoMenuItems = [
-  { id: "m1", category: "Wings & Wraps", name: "Crispy Hot Wings", subtitle: "Crispy hot wings", price: 300, discount: "", emoji: "🍗" },
-  { id: "m2", category: "Wings & Wraps", name: "Crispy BBQ Wings", subtitle: "Crispy BBQ wings", price: 700, discount: "", emoji: "🍖" },
-  { id: "m3", category: "Wings & Wraps", name: "Grilled Peri Peri Wings", subtitle: "Grilled peri peri wings", price: 599, discount: "15% off", emoji: "🔥" },
-  { id: "m4", category: "Wings & Wraps", name: "Signature Grilled Wrap", subtitle: "Signature grilled wrap", price: 649, discount: "", emoji: "🌯" },
-  { id: "m5", category: "Wings & Wraps", name: "Signature Crispy Wrap", subtitle: "Signature crispy wrap", price: 551, discount: "", emoji: "🥙" },
-  { id: "m6", category: "Burgerz", name: "Khan Wrap", subtitle: "Testing tasty", price: 900, discount: "", emoji: "🍔" },
-  { id: "m7", category: "Burgerz", name: "Pizza Fajita", subtitle: "Fajita cheesy pizza", price: 820, discount: "", emoji: "🍕" },
-  { id: "m8", category: "Burgerz", name: "Cloud Pizza", subtitle: "Testing tasty", price: 1200, discount: "", emoji: "☁️" },
-  { id: "m9", category: "Fries Station", name: "Loaded Fries", subtitle: "Cheese fries with sauce", price: 450, discount: "", emoji: "🍟" },
-  { id: "m10", category: "Special Food", name: "Alfredo Pasta", subtitle: "Creamy pasta", price: 980, discount: "10% off", emoji: "🍝" },
-  { id: "m11", category: "Karahi", name: "Chicken Karahi", subtitle: "Fresh karahi with spices", price: 1600, discount: "", emoji: "🍲" },
-  { id: "m12", category: "Classic Food", name: "Chicken Biryani", subtitle: "Classic spicy biryani", price: 380, discount: "", emoji: "🍛" }
+  { id: "m1", category: "Wings & Wraps", name: "Crispy Hot Wings", subtitle: "Crispy hot wings", price: 300, discount: "", emoji: "ðŸ—" },
+  { id: "m2", category: "Wings & Wraps", name: "Crispy BBQ Wings", subtitle: "Crispy BBQ wings", price: 700, discount: "", emoji: "ðŸ–" },
+  { id: "m3", category: "Wings & Wraps", name: "Grilled Peri Peri Wings", subtitle: "Grilled peri peri wings", price: 599, discount: "15% off", emoji: "ðŸ”¥" },
+  { id: "m4", category: "Wings & Wraps", name: "Signature Grilled Wrap", subtitle: "Signature grilled wrap", price: 649, discount: "", emoji: "ðŸŒ¯" },
+  { id: "m5", category: "Wings & Wraps", name: "Signature Crispy Wrap", subtitle: "Signature crispy wrap", price: 551, discount: "", emoji: "ðŸ¥™" },
+  { id: "m6", category: "Burgerz", name: "Khan Wrap", subtitle: "Testing tasty", price: 900, discount: "", emoji: "ðŸ”" },
+  { id: "m7", category: "Burgerz", name: "Pizza Fajita", subtitle: "Fajita cheesy pizza", price: 820, discount: "", emoji: "ðŸ•" },
+  { id: "m8", category: "Burgerz", name: "Cloud Pizza", subtitle: "Testing tasty", price: 1200, discount: "", emoji: "â˜ï¸" },
+  { id: "m9", category: "Fries Station", name: "Loaded Fries", subtitle: "Cheese fries with sauce", price: 450, discount: "", emoji: "ðŸŸ" },
+  { id: "m10", category: "Special Food", name: "Alfredo Pasta", subtitle: "Creamy pasta", price: 980, discount: "10% off", emoji: "ðŸ" },
+  { id: "m11", category: "Karahi", name: "Chicken Karahi", subtitle: "Fresh karahi with spices", price: 1600, discount: "", emoji: "ðŸ²" },
+  { id: "m12", category: "Classic Food", name: "Chicken Biryani", subtitle: "Classic spicy biryani", price: 380, discount: "", emoji: "ðŸ›" }
 ];
 
 export const tableSplitItems = [

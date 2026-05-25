@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   BadgeDollarSign,
   CalendarClock,
@@ -514,7 +514,7 @@ export default function SubscriptionPanel({ token, onBack }) {
                   >
                     <strong>{payment.restaurantName}</strong>
                     <p className="nexa-small">
-                      Rs {payment.amount} · {payment.months} months · {payment.paymentMethod}
+                      Rs {payment.amount} Â· {payment.months} months Â· {payment.paymentMethod}
                     </p>
                     <p className="nexa-small">Expiry: {payment.expiryDate}</p>
                   </div>

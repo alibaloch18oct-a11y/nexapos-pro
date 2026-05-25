@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   Bike,
   ChefHat,
@@ -283,7 +283,7 @@ export default function StaffPanel({ token, session, onBack }) {
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                       <div>
                         <h3 style={{ margin: 0 }}>{item.name}</h3>
-                        <p className="nexa-small">{roleLabel(item.role)} · {item.shift}</p>
+                        <p className="nexa-small">{roleLabel(item.role)} Â· {item.shift}</p>
                       </div>
 
                       <div
@@ -426,7 +426,7 @@ export default function StaffPanel({ token, session, onBack }) {
           >
             <Plus size={42} color="#a5f3fc" />
             <h3 style={{ margin: "8px 0" }}>{form.name || "Staff Preview"}</h3>
-            <p className="nexa-small">{roleLabel(form.role)} · {form.shift}</p>
+            <p className="nexa-small">{roleLabel(form.role)} Â· {form.shift}</p>
             <strong>PIN: {form.pin || "N/A"}</strong>
           </div>
         </aside>

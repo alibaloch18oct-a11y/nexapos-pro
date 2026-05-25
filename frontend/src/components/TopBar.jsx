@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { LogOut, Sparkles } from "lucide-react";
 
 export default function TopBar({ session, onLogout }) {
