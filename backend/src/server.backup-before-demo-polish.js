@@ -1,7 +1,6 @@
 ﻿require("dotenv").config();
 
 const express = require("express");
-const demoPolishRoutes = require("./routes/demoPolishRoutes");
 const superAdminControlRoutes = require("./routes/superAdminControlRoutes");
 const tableAdvancedRoutes = require("./routes/tableAdvancedRoutes");
 const kdsAutoRoutes = require("./routes/kdsAutoRoutes");
@@ -1356,8 +1355,6 @@ app.patch("/api/orders/:orderId/payment", requireAuth, tenantOnly, (req, res) =>
 
 app.use("/api/super-admin-control", requireAuth, superAdminControlRoutes({ readDb, writeDb }));
 
-app.use("/api/demo-polish", requireAuth, demoPolishRoutes({ readDb, writeDb }));
-
 app.listen(PORT, () => {
   console.log(`NexaPOS Pro backend running on http://localhost:${PORT}`);
 });
@@ -1389,7 +1386,6 @@ app.use("/api/kds-auto", requireAuth, kdsAutoRoutes({ readDb, writeDb }));
 
 
 app.use("/api/tables", requireAuth, tableAdvancedRoutes({ readDb, writeDb }));
-
 
 
 
