@@ -466,6 +466,59 @@ function PaymentModal({
   const discountedSubtotal = Math.max(0, subtotal - finalDiscount);
   const availablePoints = Number(loyaltyCustomer?.loyaltyPoints || 0);
   const maxRedeem = Math.min(availablePoints, Math.floor(grandTotal));
+  const [splitEnabled, setSplitEnabled] = useState(false);
+  const [splitCount, setSplitCount] = useState(2);
+  const [splitRows, setSplitRows] = useState([]);
+
+  useEffect(() => {
+    if (!splitEnabled) return;
+
+    const count = Math.max(2, Number(splitCount || 2));
+    const payable = Number(finalPayableAfterLoyalty || 0);
+    const baseAmount = Math.floor(payable / count);
+    const remainder = Math.round(payable - baseAmount * count);
+
+    const rows = Array.from({ length: count }).map((_, index) => ({
+      id: `split-${index + 1}`,
+      label: `Guest ${index + 1}`,
+      method: index === 0 ? selectedPaymentMethod : "Cash",
+      amount: index === count - 1 ? baseAmount + remainder : baseAmount,
+      reference: ""
+    }));
+
+    setSplitRows(rows);
+  }, [splitEnabled, splitCount, finalPayableAfterLoyalty, selectedPaymentMethod]);
+
+  const splitTotal = splitRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const splitRemaining = Math.round(Number(finalPayableAfterLoyalty || 0) - splitTotal);
+
+  function updateSplitRow(id, key, value) {
+    setSplitRows((prev) =>
+      prev.map((row) =>
+        row.id === id
+          ? {
+              ...row,
+              [key]: key === "amount" ? Number(value || 0) : value
+            }
+          : row
+      )
+    );
+  }
+
+  function confirmCheckout() {
+    if (splitEnabled) {
+      if (splitRemaining !== 0) {
+        alert(`Split bill remaining must be 0. Current remaining: ${money(settings, splitRemaining)}`);
+        return;
+      }
+
+      onComplete("Split Payment", finalPayableAfterLoyalty, finalDiscount, discountResult, splitRows);
+      return;
+    }
+
+    onComplete(selectedPaymentMethod, finalPayableAfterLoyalty, finalDiscount, discountResult, []);
+  }
+
 
   return (
     <ModalShell title="Order Confirmation & Checkout" onClose={onClose} wide>
@@ -1059,6 +1112,8 @@ export default function POSScreen({ token, module, session, onBack }) {
         subtotal,
         items: cart,
         paymentMethod,
+        splitPayments,
+        isSplitPayment: Array.isArray(splitPayments) && splitPayments.length > 0,
         couponCode
       });
 
@@ -1127,6 +1182,8 @@ export default function POSScreen({ token, module, session, onBack }) {
   async function saveOrder({
     paymentStatus,
     paymentMethod,
+        splitPayments,
+        isSplitPayment: Array.isArray(splitPayments) && splitPayments.length > 0,
     orderStatus,
     kitchenStatus,
     payableTotal,
@@ -1208,6 +1265,8 @@ export default function POSScreen({ token, module, session, onBack }) {
         currency: settings.currency || "Rs",
         restaurantSettings: settings,
         paymentMethod,
+        splitPayments,
+        isSplitPayment: Array.isArray(splitPayments) && splitPayments.length > 0,
         paymentStatus,
         orderStatus,
         kitchenStatus,
@@ -2758,7 +2817,7 @@ export default function POSScreen({ token, module, session, onBack }) {
           onLookupCustomer={lookupCustomerByPhone}
           onClose={() => setPaymentModal(false)}
           onRecalculate={calculateDiscounts}
-          onComplete={(method, grandTotal, discountAmount, discounts) =>
+          onComplete={(method, grandTotal, discountAmount, discounts, splitPayments = []) =>
             saveOrder({
               paymentStatus: method === "Complimentary" ? "complimentary" : "paid",
               paymentMethod: method,
@@ -2782,6 +2841,7 @@ export default function POSScreen({ token, module, session, onBack }) {
     </div>
   );
 }
+
 
 
 
