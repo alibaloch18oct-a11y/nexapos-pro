@@ -1,484 +1,871 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  BadgeDollarSign,
-  Building2,
-  CalendarClock,
-  CheckCircle2,
-  Eye,
-  EyeOff,
-  KeyRound,
-  PackagePlus,
-  Plus,
-  RefreshCw,
-  Search,
-  ShieldAlert,
-  ShieldCheck,
-  Sparkles,
-  Users
-} from "lucide-react";
 import { api } from "../lib/api";
 
-const defaultForm = {
-  restaurantName: "",
-  ownerName: "",
-  username: "",
-  password: "",
-  phone: "",
-  email: "",
-  packageName: "Custom",
-  expiryDate: "",
-  enabledModules: []
+const moduleLabels = {
+  walk_in: "Walk In",
+  take_away: "Take Away",
+  delivery: "Delivery",
+  dine_in: "Dine In",
+  drive_thru: "Drive Thru",
+  kiosk: "Kiosk",
+  orders: "Orders",
+  kds: "KDS",
+  settings: "Menu",
+  restaurant_settings: "Restaurant Settings",
+  inventory: "Inventory",
+  discounts: "Discounts",
+  staff: "Staff",
+  customers: "Customers",
+  analytics: "Reports",
+  expenses: "Expenses",
+  supplier_purchases: "Suppliers",
+  stock_movements: "Stock Movements",
+  menu_inventory_mapping: "Recipe Mapping"
 };
 
-function Field({ label, value, onChange, type = "text" }) {
+function addDays(days) {
+  const date = new Date();
+  date.setDate(date.getDate() + Number(days || 30));
+  return date.toISOString().slice(0, 10);
+}
+
+function statusTone(user) {
+  const active = user.isActive !== false && user.status !== "inactive";
+  const expiry = user.expiryDate || user.subscription?.expiryDate;
+  const expired = expiry ? new Date(expiry) < new Date() : false;
+
+  if (!active) return { label: "Inactive", cls: "inactive" };
+  if (expired) return { label: "Expired", cls: "expired" };
+  return { label: "Active", cls: "active" };
+}
+
+function EditUserModal({ user, packages, allModules, onClose, onSave, saving }) {
+  const initialModules =
+    user.enabledModules ||
+    user.subscription?.enabledModules ||
+    [];
+
+  const [form, setForm] = useState({
+    username: user.username || "",
+    password: "",
+    email: user.email || "",
+    name: user.name || "",
+    restaurantName: user.restaurantName || user.tenant?.restaurantName || user.tenant?.name || "",
+    isActive: user.isActive !== false && user.status !== "inactive",
+    packageId: user.subscription?.packageId || user.packageId || "",
+    packageName: user.packageName || user.subscription?.packageName || "Starter",
+    days: 30,
+    expiryDate: user.expiryDate || user.subscription?.expiryDate || "",
+    enabledModules: initialModules
+  });
+
+  function update(key, value) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function toggleModule(moduleKey) {
+    setForm((prev) => {
+      const exists = prev.enabledModules.includes(moduleKey);
+
+      return {
+        ...prev,
+        enabledModules: exists
+          ? prev.enabledModules.filter((item) => item !== moduleKey)
+          : [...prev.enabledModules, moduleKey]
+      };
+    });
+  }
+
+  function applyPackage(pkg) {
+    if (!pkg) return;
+
+    setForm((prev) => ({
+      ...prev,
+      packageId: pkg.id,
+      packageName: pkg.name,
+      days: pkg.days || prev.days || 30,
+      expiryDate: addDays(pkg.days || 30),
+      enabledModules: Array.isArray(pkg.modules) ? pkg.modules : prev.enabledModules
+    }));
+  }
+
   return (
-    <label className="nexa-field">
-      <span className="nexa-label">{label}</span>
-      <div className="nexa-input-wrap">
-        <input
-          className="nexa-input"
-          type={type}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={label}
-        />
+    <div className="sa-modal-backdrop">
+      <div className="sa-edit-modal">
+        <div className="sa-modal-head">
+          <div>
+            <h2>Edit User Settings</h2>
+            <p>Edit login, package, days, expiry and enabled modules.</p>
+          </div>
+
+          <button className="sa-icon-btn" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="sa-edit-grid">
+          <section className="sa-edit-section">
+            <h3>Account Details</h3>
+
+            <div className="sa-form-grid">
+              <label>
+                <span>Username</span>
+                <input value={form.username} onChange={(e) => update("username", e.target.value)} />
+              </label>
+
+              <label>
+                <span>New Password</span>
+                <input
+                  value={form.password}
+                  onChange={(e) => update("password", e.target.value)}
+                  placeholder="Leave empty to keep old password"
+                />
+              </label>
+
+              <label>
+                <span>Email</span>
+                <input value={form.email} onChange={(e) => update("email", e.target.value)} />
+              </label>
+
+              <label>
+                <span>Owner Name</span>
+                <input value={form.name} onChange={(e) => update("name", e.target.value)} />
+              </label>
+
+              <label>
+                <span>Restaurant Name</span>
+                <input value={form.restaurantName} onChange={(e) => update("restaurantName", e.target.value)} />
+              </label>
+
+              <label className="sa-switch-row">
+                <span>Active User</span>
+                <input
+                  type="checkbox"
+                  checked={form.isActive}
+                  onChange={(e) => update("isActive", e.target.checked)}
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="sa-edit-section">
+            <h3>Package & Subscription</h3>
+
+            <div className="sa-package-grid">
+              {packages.map((pkg) => (
+                <button
+                  key={pkg.id || pkg.name}
+                  className={`sa-package-card ${form.packageName === pkg.name ? "active" : ""}`}
+                  onClick={() => applyPackage(pkg)}
+                  type="button"
+                >
+                  <strong>{pkg.name}</strong>
+                  <span>{pkg.days || 30} days</span>
+                  <small>{Array.isArray(pkg.modules) ? pkg.modules.length : 0} modules</small>
+                </button>
+              ))}
+            </div>
+
+            <div className="sa-form-grid" style={{ marginTop: 14 }}>
+              <label>
+                <span>Package Name</span>
+                <input value={form.packageName} onChange={(e) => update("packageName", e.target.value)} />
+              </label>
+
+              <label>
+                <span>Add Days</span>
+                <input
+                  type="number"
+                  value={form.days}
+                  onChange={(e) => {
+                    const days = Number(e.target.value || 0);
+                    update("days", days);
+                    update("expiryDate", addDays(days));
+                  }}
+                />
+              </label>
+
+              <label>
+                <span>Expiry Date</span>
+                <input type="date" value={form.expiryDate} onChange={(e) => update("expiryDate", e.target.value)} />
+              </label>
+            </div>
+          </section>
+
+          <section className="sa-edit-section full">
+            <h3>Enabled Modules</h3>
+
+            <div className="sa-module-grid">
+              {allModules.map((moduleKey) => (
+                <button
+                  type="button"
+                  key={moduleKey}
+                  className={`sa-module-chip ${form.enabledModules.includes(moduleKey) ? "active" : ""}`}
+                  onClick={() => toggleModule(moduleKey)}
+                >
+                  {form.enabledModules.includes(moduleKey) ? "✓" : "+"} {moduleLabels[moduleKey] || moduleKey}
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <div className="sa-modal-actions">
+          <button className="sa-soft-btn" onClick={onClose}>Cancel</button>
+          <button className="sa-primary-btn" onClick={() => onSave(user, form)} disabled={saving}>
+            {saving ? "Saving..." : "Save User Settings"}
+          </button>
+        </div>
       </div>
-    </label>
+    </div>
   );
 }
 
-function ModuleToggle({ module, active, onClick }) {
+function UserCard({ user, onEdit, onToggle }) {
+  const tone = statusTone(user);
+  const modules = user.enabledModules || user.subscription?.enabledModules || [];
+  const expiry = user.expiryDate || user.subscription?.expiryDate || "Not set";
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        borderRadius: 18,
-        border: active ? "1px solid rgba(34,211,238,.55)" : "1px solid rgba(255,255,255,.10)",
-        background: active ? "rgba(34,211,238,.15)" : "rgba(255,255,255,.055)",
-        color: "white",
-        padding: 11,
-        textAlign: "left",
-        minHeight: 70,
-        cursor: "pointer"
-      }}
-    >
-      <strong>{module.name}</strong>
-      <p className="nexa-small" style={{ marginBottom: 0 }}>
-        {module.description}
-      </p>
-    </button>
+    <div className="sa-user-card">
+      <div className="sa-user-top">
+        <div>
+          <h3>{user.restaurantName || user.tenant?.restaurantName || user.username}</h3>
+          <p>{user.username} · {user.email || "No email"}</p>
+        </div>
+
+        <span className={`sa-status ${tone.cls}`}>{tone.label}</span>
+      </div>
+
+      <div className="sa-user-meta">
+        <div>
+          <span>Package</span>
+          <strong>{user.packageName || user.subscription?.packageName || "Starter"}</strong>
+        </div>
+
+        <div>
+          <span>Expiry</span>
+          <strong>{expiry}</strong>
+        </div>
+
+        <div>
+          <span>Modules</span>
+          <strong>{modules.length}</strong>
+        </div>
+      </div>
+
+      <div className="sa-module-preview">
+        {modules.slice(0, 7).map((moduleKey) => (
+          <span key={moduleKey}>{moduleLabels[moduleKey] || moduleKey}</span>
+        ))}
+        {modules.length > 7 ? <span>+{modules.length - 7}</span> : null}
+      </div>
+
+      <div className="sa-card-actions">
+        <button className="sa-primary-btn" onClick={() => onEdit(user)}>Edit User</button>
+        <button
+          className={user.isActive === false || user.status === "inactive" ? "sa-soft-btn" : "sa-danger-btn"}
+          onClick={() => onToggle(user)}
+        >
+          {user.isActive === false || user.status === "inactive" ? "Activate" : "Deactivate"}
+        </button>
+      </div>
+    </div>
   );
-}
-
-function getExpiryStatus(tenant) {
-  if (!tenant.expiryDate) {
-    return {
-      label: "No expiry",
-      color: "#a5f3fc",
-      expired: false,
-      soon: false
-    };
-  }
-
-  const expiry = new Date(tenant.expiryDate);
-  const now = new Date();
-  const days = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
-
-  if (days < 0) {
-    return {
-      label: "Expired",
-      color: "#fca5a5",
-      expired: true,
-      soon: false
-    };
-  }
-
-  if (days <= 7) {
-    return {
-      label: `${days} days left`,
-      color: "#fde68a",
-      expired: false,
-      soon: true
-    };
-  }
-
-  return {
-    label: `${days} days left`,
-    color: "#86efac",
-    expired: false,
-    soon: false
-  };
 }
 
 export default function SuperAdminDashboard({ token, refreshSession, onOpenModule }) {
-  const [tenants, setTenants] = useState([]);
-  const [modules, setModules] = useState([]);
+  const [users, setUsers] = useState([]);
   const [packages, setPackages] = useState([]);
-  const [form, setForm] = useState(defaultForm);
+  const [allModules, setAllModules] = useState([]);
   const [search, setSearch] = useState("");
-  const [showForm, setShowForm] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const tenantsWithStatus = useMemo(() => {
-    return tenants.map((tenant) => ({
-      ...tenant,
-      expiryStatus: getExpiryStatus(tenant)
-    }));
-  }, [tenants]);
+  async function loadUsers() {
+    setLoading(true);
 
-  const filteredTenants = useMemo(() => {
-    return tenantsWithStatus.filter((tenant) => {
-      if (!search) return true;
-
-      const query = search.toLowerCase();
-
-      return (
-        tenant.restaurantName.toLowerCase().includes(query) ||
-        tenant.ownerName.toLowerCase().includes(query) ||
-        String(tenant.phone || "").toLowerCase().includes(query) ||
-        String(tenant.packageName || "").toLowerCase().includes(query) ||
-        String(tenant.paymentStatus || "").toLowerCase().includes(query)
-      );
-    });
-  }, [tenantsWithStatus, search]);
-
-  async function loadData() {
     try {
-      const [tenantRes, moduleRes, packageRes] = await Promise.all([
-        api(token).get("/api/super/tenants"),
-        api(token).get("/api/modules"),
-        api(token).get("/api/packages")
-      ]);
-
-      setTenants(tenantRes.data || []);
-      setModules(moduleRes.data || []);
-      setPackages(packageRes.data.packages || []);
+      const res = await api(token).get("/api/super-admin-control/users");
+      setUsers(res.data.users || []);
+      setPackages(res.data.packages || []);
+      setAllModules(res.data.allModules || []);
     } catch (error) {
-      alert(error.response?.data?.message || "Failed to load super admin data.");
+      alert(error.response?.data?.message || "Failed to load super admin users.");
+      setUsers([]);
+    } finally {
+      setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadData();
+    loadUsers();
   }, []);
 
-  function setValue(key, value) {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  }
+  const filteredUsers = useMemo(() => {
+    const q = search.toLowerCase();
 
-  function toggleModule(key) {
-    if (form.enabledModules.includes(key)) {
-      setValue("enabledModules", form.enabledModules.filter((item) => item !== key));
-    } else {
-      setValue("enabledModules", [...form.enabledModules, key]);
-    }
-  }
+    return users.filter((user) => {
+      return (
+        !q ||
+        String(user.username || "").toLowerCase().includes(q) ||
+        String(user.email || "").toLowerCase().includes(q) ||
+        String(user.restaurantName || "").toLowerCase().includes(q) ||
+        String(user.packageName || "").toLowerCase().includes(q)
+      );
+    });
+  }, [users, search]);
 
-  function applyPackage(packageId) {
-    const plan = packages.find((item) => item.id === packageId);
-
-    if (!plan) return;
-
-    setForm((prev) => ({
-      ...prev,
-      packageName: plan.name,
-      enabledModules: plan.enabledModules || []
-    }));
-  }
-
-  async function createTenant(e) {
-    e.preventDefault();
-
-    if (!form.restaurantName || !form.ownerName || !form.username || !form.password) {
-      alert("Restaurant name, owner name, username and password are required.");
-      return;
-    }
-
+  async function saveUser(user, form) {
     setSaving(true);
 
     try {
-      await api(token).post("/api/super/tenants", form);
-      alert("Client created successfully.");
+      const res = await api(token).patch(`/api/super-admin-control/users/${user.id}`, form);
 
-      setForm(defaultForm);
-      setShowForm(false);
-      await loadData();
-      await refreshSession?.();
+      setUsers((prev) =>
+        prev.map((item) => (item.id === user.id ? res.data.user : item))
+      );
+
+      setEditingUser(null);
+      alert("User settings updated successfully.");
     } catch (error) {
-      alert(error.response?.data?.message || "Failed to create client.");
+      alert(error.response?.data?.message || "Failed to update user settings.");
     } finally {
       setSaving(false);
     }
   }
 
-  async function quickToggleModule(tenant, moduleKey) {
-    const enabled = tenant.enabledModules || [];
-    const nextModules = enabled.includes(moduleKey)
-      ? enabled.filter((item) => item !== moduleKey)
-      : [...enabled, moduleKey];
+  async function toggleUser(user) {
+    const nextActive = user.isActive === false || user.status === "inactive";
 
     try {
-      await api(token).patch(`/api/super/tenants/${tenant.id}/modules`, {
-        enabledModules: nextModules
+      await api(token).patch(`/api/super-admin-control/users/${user.id}/status`, {
+        isActive: nextActive
       });
 
-      await loadData();
+      await loadUsers();
     } catch (error) {
-      alert(error.response?.data?.message || "Failed to update modules.");
+      alert(error.response?.data?.message || "Failed to update user status.");
     }
   }
 
-  const activeTenants = tenantsWithStatus.filter((tenant) => tenant.status === "active" && !tenant.expiryStatus.expired);
-  const expiredTenants = tenantsWithStatus.filter((tenant) => tenant.expiryStatus.expired);
-  const expiringTenants = tenantsWithStatus.filter((tenant) => tenant.expiryStatus.soon);
+  const stats = {
+    total: users.length,
+    active: users.filter((user) => statusTone(user).cls === "active").length,
+    expired: users.filter((user) => statusTone(user).cls === "expired").length,
+    inactive: users.filter((user) => statusTone(user).cls === "inactive").length
+  };
 
   return (
-    <div className="nexa-container">
-      <div className="nexa-hero-panel">
-        <div className="nexa-badge">
-          <ShieldCheck size={16} /> Super Admin Control
-        </div>
-        <h2 className="nexa-client-title">NexaPOS Pro Command Center</h2>
-        <p className="nexa-hero-p">
-          Create restaurant clients, assign packages, monitor renewals and lock expired accounts from one SaaS control center.
-        </p>
-      </div>
+    <div className="sa-page">
+      <style>
+        {`
+          .sa-page {
+            min-height: calc(100vh - 72px);
+            padding: 18px;
+            color: white;
+            background:
+              radial-gradient(circle at 12% 16%, rgba(34,211,238,.12), transparent 28%),
+              radial-gradient(circle at 84% 12%, rgba(168,85,247,.12), transparent 30%),
+              linear-gradient(180deg,#020617,#071028);
+          }
 
-      <div className="nexa-stats">
-        {[
-          ["Total Clients", tenants.length, Building2],
-          ["Active Clients", activeTenants.length, CheckCircle2],
-          ["Expired", expiredTenants.length, ShieldAlert],
-          ["Expiring Soon", expiringTenants.length, CalendarClock],
-          ["Packages", packages.length, PackagePlus]
-        ].map(([label, value, Icon]) => (
-          <div className="nexa-stat-card" key={label}>
-            <Icon color="#d8b4fe" size={30} />
-            <p className="nexa-stat-label">{label}</p>
-            <p className="nexa-stat-value">{value}</p>
-          </div>
-        ))}
-      </div>
+          .sa-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            align-items: start;
+            margin-bottom: 16px;
+          }
 
-      <div className="nexa-row-between" style={{ marginBottom: 14 }}>
+          .sa-title {
+            margin: 0;
+            font-size: 36px;
+            font-weight: 1000;
+            letter-spacing: -.04em;
+          }
+
+          .sa-sub {
+            margin: 6px 0 0;
+            color: #94a3b8;
+          }
+
+          .sa-head-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+          }
+
+          .sa-primary-btn,
+          .sa-soft-btn,
+          .sa-danger-btn,
+          .sa-icon-btn {
+            border: 0;
+            color: white;
+            font-weight: 900;
+            cursor: pointer;
+            transition: .18s ease;
+          }
+
+          .sa-primary-btn,
+          .sa-soft-btn,
+          .sa-danger-btn {
+            min-height: 43px;
+            border-radius: 15px;
+            padding: 0 14px;
+          }
+
+          .sa-primary-btn {
+            background: linear-gradient(135deg,#06b6d4,#2563eb);
+          }
+
+          .sa-soft-btn,
+          .sa-icon-btn {
+            background: rgba(255,255,255,.08);
+            border: 1px solid rgba(255,255,255,.10);
+          }
+
+          .sa-danger-btn {
+            background: rgba(239,68,68,.16);
+            border: 1px solid rgba(239,68,68,.24);
+            color: #fecaca;
+          }
+
+          .sa-primary-btn:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+          }
+
+          .sa-icon-btn {
+            width: 46px;
+            height: 46px;
+            border-radius: 16px;
+          }
+
+          .sa-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 14px;
+          }
+
+          .sa-stat {
+            padding: 15px;
+            border-radius: 23px;
+            background: rgba(15,23,42,.78);
+            border: 1px solid rgba(255,255,255,.10);
+          }
+
+          .sa-stat span {
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 800;
+          }
+
+          .sa-stat strong {
+            display: block;
+            margin-top: 6px;
+            font-size: 29px;
+            font-weight: 1000;
+          }
+
+          .sa-toolbar {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 12px;
+            padding: 14px;
+            border-radius: 24px;
+            background: rgba(15,23,42,.78);
+            border: 1px solid rgba(255,255,255,.10);
+            margin-bottom: 14px;
+          }
+
+          .sa-search {
+            height: 45px;
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.07);
+            color: white;
+            padding: 0 14px;
+            outline: none;
+            font-weight: 800;
+          }
+
+          .sa-user-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 14px;
+          }
+
+          .sa-user-card {
+            padding: 15px;
+            border-radius: 26px;
+            background: rgba(15,23,42,.80);
+            border: 1px solid rgba(255,255,255,.10);
+            box-shadow: 0 20px 50px rgba(0,0,0,.22);
+          }
+
+          .sa-user-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: start;
+          }
+
+          .sa-user-top h3 {
+            margin: 0;
+            font-size: 22px;
+          }
+
+          .sa-user-top p {
+            margin: 5px 0 0;
+            color: #94a3b8;
+            font-size: 13px;
+          }
+
+          .sa-status {
+            border-radius: 999px;
+            padding: 7px 10px;
+            font-size: 12px;
+            font-weight: 950;
+          }
+
+          .sa-status.active {
+            color: #86efac;
+            background: rgba(34,197,94,.13);
+            border: 1px solid rgba(34,197,94,.24);
+          }
+
+          .sa-status.expired {
+            color: #fde68a;
+            background: rgba(250,204,21,.13);
+            border: 1px solid rgba(250,204,21,.24);
+          }
+
+          .sa-status.inactive {
+            color: #fca5a5;
+            background: rgba(239,68,68,.13);
+            border: 1px solid rgba(239,68,68,.24);
+          }
+
+          .sa-user-meta {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 9px;
+            margin-top: 13px;
+          }
+
+          .sa-user-meta div {
+            padding: 10px;
+            border-radius: 16px;
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(255,255,255,.08);
+          }
+
+          .sa-user-meta span {
+            color: #94a3b8;
+            font-size: 11px;
+            font-weight: 800;
+          }
+
+          .sa-user-meta strong {
+            display: block;
+            margin-top: 5px;
+            font-size: 13px;
+          }
+
+          .sa-module-preview {
+            margin-top: 12px;
+            display: flex;
+            gap: 7px;
+            flex-wrap: wrap;
+          }
+
+          .sa-module-preview span {
+            padding: 6px 9px;
+            border-radius: 999px;
+            background: rgba(34,211,238,.10);
+            color: #a5f3fc;
+            font-size: 11px;
+            font-weight: 850;
+          }
+
+          .sa-card-actions {
+            display: grid;
+            grid-template-columns: 1fr 130px;
+            gap: 9px;
+            margin-top: 13px;
+          }
+
+          .sa-empty {
+            padding: 28px;
+            border-radius: 24px;
+            background: rgba(15,23,42,.78);
+            border: 1px solid rgba(255,255,255,.10);
+            color: #94a3b8;
+          }
+
+          .sa-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: rgba(2,6,23,.75);
+            backdrop-filter: blur(10px);
+            display: grid;
+            place-items: center;
+            padding: 18px;
+          }
+
+          .sa-edit-modal {
+            width: min(1180px, calc(100vw - 36px));
+            max-height: calc(100vh - 36px);
+            overflow: hidden;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            border-radius: 30px;
+            background: #0f172a;
+            border: 1px solid rgba(255,255,255,.12);
+            box-shadow: 0 30px 90px rgba(0,0,0,.45);
+          }
+
+          .sa-modal-head {
+            padding: 18px 20px;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+          }
+
+          .sa-modal-head h2 {
+            margin: 0;
+          }
+
+          .sa-modal-head p {
+            margin: 5px 0 0;
+            color: #94a3b8;
+          }
+
+          .sa-edit-grid {
+            overflow-y: auto;
+            min-height: 0;
+            padding: 16px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+          }
+
+          .sa-edit-section {
+            border-radius: 24px;
+            background: rgba(255,255,255,.055);
+            border: 1px solid rgba(255,255,255,.09);
+            padding: 14px;
+          }
+
+          .sa-edit-section.full {
+            grid-column: 1 / -1;
+          }
+
+          .sa-edit-section h3 {
+            margin: 0 0 12px;
+            font-size: 18px;
+          }
+
+          .sa-form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+          }
+
+          .sa-form-grid label,
+          .sa-switch-row {
+            display: grid;
+            gap: 7px;
+          }
+
+          .sa-form-grid span {
+            color: #cbd5e1;
+            font-size: 12px;
+            font-weight: 850;
+          }
+
+          .sa-form-grid input {
+            height: 43px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.08);
+            color: white;
+            padding: 0 12px;
+            outline: none;
+            font-weight: 800;
+          }
+
+          .sa-switch-row {
+            display: flex !important;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            border-radius: 16px;
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(255,255,255,.08);
+          }
+
+          .sa-switch-row input {
+            width: 22px;
+            height: 22px;
+          }
+
+          .sa-package-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+          }
+
+          .sa-package-card {
+            min-height: 95px;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.06);
+            color: white;
+            cursor: pointer;
+            display: grid;
+            justify-items: start;
+            align-content: center;
+            gap: 5px;
+            padding: 12px;
+            text-align: left;
+          }
+
+          .sa-package-card.active {
+            background: rgba(34,211,238,.14);
+            border-color: rgba(34,211,238,.34);
+          }
+
+          .sa-package-card span,
+          .sa-package-card small {
+            color: #94a3b8;
+          }
+
+          .sa-module-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+          }
+
+          .sa-module-chip {
+            min-height: 37px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.07);
+            color: white;
+            padding: 0 12px;
+            cursor: pointer;
+            font-weight: 850;
+          }
+
+          .sa-module-chip.active {
+            background: rgba(34,211,238,.16);
+            border-color: rgba(34,211,238,.34);
+            color: #a5f3fc;
+          }
+
+          .sa-modal-actions {
+            padding: 14px 16px;
+            border-top: 1px solid rgba(255,255,255,.08);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+          }
+
+          @media (max-width: 900px) {
+            .sa-stats,
+            .sa-toolbar,
+            .sa-edit-grid,
+            .sa-form-grid,
+            .sa-package-grid {
+              grid-template-columns: 1fr;
+            }
+
+            .sa-edit-section.full {
+              grid-column: auto;
+            }
+
+            .sa-head {
+              display: grid;
+            }
+
+            .sa-head-actions {
+              justify-content: flex-start;
+            }
+          }
+        `}
+      </style>
+
+      <div className="sa-head">
         <div>
-          <h3 className="nexa-section-title">Client Management</h3>
-          <p className="nexa-section-sub">One app, many restaurant clients, separate data per account.</p>
+          <h1 className="sa-title">Super Admin Control Center</h1>
+          <p className="sa-sub">
+            Manage customers, active users, packages, expiry days, passwords and enabled modules.
+          </p>
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button className="nexa-logout" onClick={loadData}>
-            <RefreshCw size={16} /> Refresh
+        <div className="sa-head-actions">
+          <button className="sa-soft-btn" onClick={loadUsers}>Refresh</button>
+          <button className="sa-primary-btn" onClick={() => onOpenModule?.({ key: "super_packages", name: "Packages" })}>
+            Package Builder
           </button>
-
-          <button className="nexa-logout" onClick={() => onOpenModule?.({ key: "super_subscriptions" })}>
-            <BadgeDollarSign size={16} /> Subscriptions
-          </button>
-
-          <button className="nexa-logout" onClick={() => onOpenModule?.({ key: "super_packages" })}>
-            <PackagePlus size={16} /> Package Builder
-          </button>
-
-          <button className="nexa-create-btn" onClick={() => setShowForm(!showForm)}>
-            <Plus size={16} /> {showForm ? "Close Form" : "Create Client"}
+          <button className="sa-soft-btn" onClick={() => onOpenModule?.({ key: "super_subscriptions", name: "Subscriptions" })}>
+            Subscriptions
           </button>
         </div>
       </div>
 
-      {showForm ? (
-        <form className="nexa-panel" onSubmit={createTenant} style={{ marginBottom: 16 }}>
-          <div className="nexa-row-between">
-            <div>
-              <h2 style={{ margin: 0 }}>Create Restaurant Client</h2>
-              <p className="nexa-section-sub">Create login and enable selected modules.</p>
-            </div>
-            <Sparkles color="#a5f3fc" size={28} />
-          </div>
+      <div className="sa-stats">
+        <div className="sa-stat"><span>Total Users</span><strong>{stats.total}</strong></div>
+        <div className="sa-stat"><span>Active</span><strong>{stats.active}</strong></div>
+        <div className="sa-stat"><span>Expired</span><strong>{stats.expired}</strong></div>
+        <div className="sa-stat"><span>Inactive</span><strong>{stats.inactive}</strong></div>
+      </div>
 
-          <div className="nexa-form-grid">
-            <Field label="Restaurant Name" value={form.restaurantName} onChange={(v) => setValue("restaurantName", v)} />
-            <Field label="Owner Name" value={form.ownerName} onChange={(v) => setValue("ownerName", v)} />
-          </div>
+      <div className="sa-toolbar">
+        <input
+          className="sa-search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search user, restaurant, email, package..."
+        />
 
-          <div className="nexa-form-grid">
-            <Field label="Username" value={form.username} onChange={(v) => setValue("username", v)} />
-            <Field label="Password" value={form.password} onChange={(v) => setValue("password", v)} />
-          </div>
+        <button className="sa-primary-btn" onClick={loadUsers}>
+          Reload Users
+        </button>
+      </div>
 
-          <div className="nexa-form-grid">
-            <Field label="Phone" value={form.phone} onChange={(v) => setValue("phone", v)} />
-            <Field label="Email" value={form.email} onChange={(v) => setValue("email", v)} />
-          </div>
-
-          <div className="nexa-form-grid">
-            <label className="nexa-field">
-              <span className="nexa-label">Apply Package</span>
-              <div className="nexa-input-wrap">
-                <select
-                  className="nexa-input"
-                  onChange={(e) => applyPackage(e.target.value)}
-                  defaultValue=""
-                >
-                  <option value="">Select package template</option>
-                  {packages.filter((plan) => plan.isActive !== false).map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.name} · Rs {plan.monthlyPrice}/month
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </label>
-
-            <Field label="Expiry Date" type="date" value={form.expiryDate} onChange={(v) => setValue("expiryDate", v)} />
-          </div>
-
-          <Field label="Package Name" value={form.packageName} onChange={(v) => setValue("packageName", v)} />
-
-          <div style={{ marginTop: 14 }}>
-            <div className="nexa-row-between">
-              <strong>Select Modules</strong>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button type="button" className="nexa-pill" onClick={() => setValue("enabledModules", modules.map((module) => module.key))}>
-                  Select All
-                </button>
-                <button type="button" className="nexa-pill" onClick={() => setValue("enabledModules", [])}>
-                  Clear
-                </button>
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 10, marginTop: 10 }}>
-              {modules.map((module) => (
-                <ModuleToggle
-                  key={module.key}
-                  module={module}
-                  active={form.enabledModules.includes(module.key)}
-                  onClick={() => toggleModule(module.key)}
-                />
-              ))}
-            </div>
-          </div>
-
-          <button className="nexa-create-btn" disabled={saving} style={{ width: "100%", marginTop: 16 }}>
-            <KeyRound size={16} />
-            {saving ? "Creating Client..." : "Create Client Login"}
-          </button>
-        </form>
-      ) : null}
-
-      <div className="nexa-panel">
-        <div className="nexa-row-between" style={{ marginBottom: 14 }}>
-          <div>
-            <h2 style={{ margin: 0 }}>Restaurant Clients</h2>
-            <p className="nexa-section-sub">{filteredTenants.length} clients showing</p>
-          </div>
-
-          <div className="nexa-input-wrap" style={{ minWidth: 300 }}>
-            <Search size={16} color="#a5f3fc" />
-            <input
-              className="nexa-input"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search clients..."
+      {loading ? (
+        <div className="sa-empty">Loading users...</div>
+      ) : filteredUsers.length === 0 ? (
+        <div className="sa-empty">No client users found.</div>
+      ) : (
+        <div className="sa-user-grid">
+          {filteredUsers.map((user) => (
+            <UserCard
+              key={user.id}
+              user={user}
+              onEdit={setEditingUser}
+              onToggle={toggleUser}
             />
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 12 }}>
-          {filteredTenants.map((tenant) => (
-            <div
-              key={tenant.id}
-              style={{
-                borderRadius: 22,
-                border: tenant.expiryStatus.expired ? "1px solid rgba(239,68,68,.38)" : "1px solid rgba(255,255,255,.11)",
-                background: tenant.expiryStatus.expired ? "rgba(239,68,68,.10)" : "rgba(255,255,255,.055)",
-                padding: 14
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <div>
-                  <h3 style={{ margin: 0 }}>{tenant.restaurantName}</h3>
-                  <p className="nexa-small">Owner: {tenant.ownerName}</p>
-                  <p className="nexa-small">Package: {tenant.packageName || "Custom"}</p>
-                </div>
-
-                <div
-                  style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 16,
-                    background: tenant.expiryStatus.expired ? "rgba(239,68,68,.16)" : "rgba(34,211,238,.14)",
-                    display: "grid",
-                    placeItems: "center",
-                    color: tenant.expiryStatus.color
-                  }}
-                >
-                  {tenant.expiryStatus.expired ? <ShieldAlert size={22} /> : <Building2 size={22} />}
-                </div>
-              </div>
-
-              <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                <div className="nexa-pill">
-                  <Users size={14} /> Users {tenant.usersCount || 0}
-                </div>
-                <div className="nexa-pill">
-                  <ShieldCheck size={14} /> {tenant.status}
-                </div>
-                <div className="nexa-pill" style={{ color: tenant.expiryStatus.color }}>
-                  <CalendarClock size={14} /> {tenant.expiryStatus.label}
-                </div>
-                <div className="nexa-pill">
-                  <PackagePlus size={14} /> {tenant.enabledModules?.length || 0} modules
-                </div>
-                <div className="nexa-pill">
-                  Pay: {tenant.paymentStatus || "trial"}
-                </div>
-                <div className="nexa-pill">
-                  Sub: {tenant.subscriptionStatus || "active"}
-                </div>
-              </div>
-
-              <div style={{ marginTop: 12 }}>
-                <p className="nexa-small">Quick Module Toggle</p>
-                <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-                  {modules.slice(0, 10).map((module) => {
-                    const enabled = tenant.enabledModules?.includes(module.key);
-
-                    return (
-                      <button
-                        key={module.key}
-                        className="nexa-pill"
-                        onClick={() => quickToggleModule(tenant, module.key)}
-                        style={{
-                          background: enabled ? "rgba(34,197,94,.18)" : "rgba(255,255,255,.06)",
-                          color: enabled ? "#86efac" : "#cbd5e1"
-                        }}
-                      >
-                        {enabled ? <Eye size={12} /> : <EyeOff size={12} />}
-                        {module.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  marginTop: 12,
-                  padding: 10,
-                  borderRadius: 16,
-                  background: "rgba(2,6,23,.48)",
-                  border: "1px solid rgba(255,255,255,.08)"
-                }}
-              >
-                <p className="nexa-small">Login URL</p>
-                <strong>Use same app link with this client username/password.</strong>
-              </div>
-            </div>
           ))}
         </div>
-      </div>
+      )}
+
+      {editingUser ? (
+        <EditUserModal
+          user={editingUser}
+          packages={packages}
+          allModules={allModules}
+          onClose={() => setEditingUser(null)}
+          onSave={saveUser}
+          saving={saving}
+        />
+      ) : null}
     </div>
   );
 }
