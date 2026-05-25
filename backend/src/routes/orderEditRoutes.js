@@ -72,16 +72,33 @@ function recalculateOrder(order, nextItems) {
   };
 }
 
+function findTenantOrder(db, tenantId, orderId) {
+  return db.orders.find(
+    (item) =>
+      item.tenantId === tenantId &&
+      (item.id === orderId || item.orderNo === orderId)
+  );
+}
+
+function normalizePaymentMethod(method) {
+  const raw = String(method || "Cash").trim();
+  if (!raw) return "Cash";
+
+  const key = raw.toLowerCase();
+  if (key.includes("card")) return "Card";
+  if (key.includes("easy")) return "Easypaisa";
+  if (key.includes("jazz")) return "JazzCash";
+  if (key.includes("bank")) return "Bank Transfer";
+  if (key.includes("cash")) return "Cash";
+  return raw;
+}
+
 module.exports = function orderEditRoutes({ readDb, writeDb }) {
   router.patch("/:orderId", tenantOnly, (req, res) => {
     const { orderId } = req.params;
     const db = ensureCollections(readDb());
 
-    const order = db.orders.find(
-      (item) =>
-        item.tenantId === req.user.tenantId &&
-        (item.id === orderId || item.orderNo === orderId)
-    );
+    const order = findTenantOrder(db, req.user.tenantId, orderId);
 
     if (!order) {
       return res.status(404).json({
@@ -157,15 +174,86 @@ module.exports = function orderEditRoutes({ readDb, writeDb }) {
     });
   });
 
+  router.patch("/:orderId/pay", tenantOnly, (req, res) => {
+    const { orderId } = req.params;
+    const db = ensureCollections(readDb());
+
+    const order = findTenantOrder(db, req.user.tenantId, orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Order not found."
+      });
+    }
+
+    if (order.paymentStatus === "cancelled" || order.orderStatus === "cancelled") {
+      return res.status(400).json({
+        message: "Cancelled order cannot be paid."
+      });
+    }
+
+    if (order.paymentStatus === "paid" || order.paymentStatus === "complimentary") {
+      return res.status(400).json({
+        message: "Order is already paid."
+      });
+    }
+
+    const paymentMethod = normalizePaymentMethod(req.body.paymentMethod);
+    const amountReceived = Number(req.body.amountReceived || order.total || 0);
+
+    const before = {
+      paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod,
+      paidAt: order.paidAt
+    };
+
+    order.paymentStatus = "paid";
+    order.paymentMethod = paymentMethod;
+    order.amountReceived = amountReceived;
+    order.paymentReference = req.body.paymentReference || "";
+    order.paymentNote = req.body.note || "Marked paid from Orders Panel";
+    order.paidAt = new Date().toISOString();
+    order.paidBy = req.user.username;
+    order.updatedAt = new Date().toISOString();
+
+    if (order.kitchenStatus === "cash_received") {
+      order.orderStatus = "completed";
+    } else if (!["served", "completed"].includes(order.orderStatus)) {
+      order.orderStatus = order.orderStatus || "placed";
+    }
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "ORDER_MARKED_PAID",
+      actor: req.user.username,
+      details: {
+        orderId: order.id,
+        orderNo: order.orderNo,
+        before,
+        after: {
+          paymentStatus: order.paymentStatus,
+          paymentMethod: order.paymentMethod,
+          amountReceived: order.amountReceived,
+          paidAt: order.paidAt
+        }
+      },
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: "Order marked as paid successfully.",
+      order
+    });
+  });
+
   router.patch("/:orderId/cancel", tenantOnly, (req, res) => {
     const { orderId } = req.params;
     const db = ensureCollections(readDb());
 
-    const order = db.orders.find(
-      (item) =>
-        item.tenantId === req.user.tenantId &&
-        (item.id === orderId || item.orderNo === orderId)
-    );
+    const order = findTenantOrder(db, req.user.tenantId, orderId);
 
     if (!order) {
       return res.status(404).json({

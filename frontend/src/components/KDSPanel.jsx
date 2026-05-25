@@ -44,19 +44,26 @@ function statusTone(status) {
   if (current === "new") return { color: "#a5f3fc", bg: "rgba(34,211,238,.13)", border: "rgba(34,211,238,.30)", icon: "🆕" };
   if (current === "preparing") return { color: "#fde68a", bg: "rgba(250,204,21,.13)", border: "rgba(250,204,21,.30)", icon: "🔥" };
   if (current === "ready") return { color: "#86efac", bg: "rgba(34,197,94,.13)", border: "rgba(34,197,94,.30)", icon: "✅" };
-  if (current === "rider_picked") return { color: "#c4b5fd", bg: "rgba(168,85,247,.13)", border: "rgba(168,85,247,.30)", icon: "🎒" };
-  if (current === "rider_on_way") return { color: "#93c5fd", bg: "rgba(59,130,246,.13)", border: "rgba(59,130,246,.30)", icon: "🛵" };
+  if (current === "rider_picked") return { color: "#c4b5fd", bg: "rgba(168,85,247,.13)", border: "rgba(168,85,247,.30)", icon: "🛵" };
+  if (current === "rider_on_way") return { color: "#93c5fd", bg: "rgba(59,130,246,.13)", border: "rgba(59,130,246,.30)", icon: "📍" };
   if (current === "rider_delivered") return { color: "#bbf7d0", bg: "rgba(22,163,74,.13)", border: "rgba(22,163,74,.30)", icon: "📦" };
   if (current === "cash_received") return { color: "#fef08a", bg: "rgba(234,179,8,.13)", border: "rgba(234,179,8,.30)", icon: "💵" };
-  if (current === "cancelled") return { color: "#fca5a5", bg: "rgba(239,68,68,.13)", border: "rgba(239,68,68,.30)", icon: "⛔" };
+  if (current === "cancelled") return { color: "#fca5a5", bg: "rgba(239,68,68,.13)", border: "rgba(239,68,68,.30)", icon: "✕" };
 
-  return { color: "#cbd5e1", bg: "rgba(255,255,255,.08)", border: "rgba(255,255,255,.12)", icon: "🍽️" };
+  return { color: "#cbd5e1", bg: "rgba(255,255,255,.08)", border: "rgba(255,255,255,.12)", icon: "⏱️" };
 }
 
-function minutesSince(value) {
+function secondsSince(value, nowMs) {
   const date = new Date(value || Date.now()).getTime();
   if (Number.isNaN(date)) return 0;
-  return Math.max(0, Math.floor((Date.now() - date) / 60000));
+  return Math.max(0, Math.floor((nowMs - date) / 1000));
+}
+
+function formatTimer(seconds) {
+  const safe = Math.max(0, Number(seconds || 0));
+  const m = Math.floor(safe / 60);
+  const s = safe % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
 function money(order, value) {
@@ -65,6 +72,100 @@ function money(order, value) {
 
 function orderKey(order) {
   return order.id || order.orderNo || `${order.createdAt}-${order.phone}`;
+}
+
+function isUnpaidDelivery(order) {
+  const method = String(order.paymentMethod || "").toLowerCase();
+  const status = String(order.paymentStatus || "").toLowerCase();
+
+  return (
+    order.mode === "delivery" &&
+    (
+      status === "unpaid" ||
+      method.includes("cash on delivery") ||
+      method === "cod" ||
+      method.includes("pay later") ||
+      method.includes("unpaid")
+    )
+  );
+}
+
+function workflowSteps(order) {
+  if (order.mode === "delivery") {
+    return isUnpaidDelivery(order)
+      ? ["new", "preparing", "ready", "rider_picked", "rider_on_way", "rider_delivered", "cash_received"]
+      : ["new", "preparing", "ready", "rider_picked", "rider_on_way", "rider_delivered"];
+  }
+
+  return ["new", "preparing", "ready", "served"];
+}
+
+function nextStatusFor(order) {
+  const current = normalizeStatus(order.kitchenStatus || order.orderStatus);
+  const steps = workflowSteps(order);
+  const index = steps.indexOf(current);
+  if (index < 0 || index >= steps.length - 1) return null;
+  return steps[index + 1];
+}
+
+function statusMinutes(current, settings) {
+  const map = {
+    new: settings.newToPreparingMinutes,
+    preparing: settings.preparingToReadyMinutes,
+    ready: settings.readyToRiderPickedMinutes,
+    rider_picked: settings.riderPickedToOnWayMinutes,
+    rider_on_way: settings.riderOnWayToDeliveredMinutes,
+    rider_delivered: settings.deliveredToCashReceivedMinutes
+  };
+
+  return Math.max(1, Number(map[current] || 1));
+}
+
+function getTimer(order, settings, nowMs) {
+  const current = normalizeStatus(order.kitchenStatus || order.orderStatus);
+  const nextStatus = nextStatusFor(order);
+
+  if (!nextStatus) {
+    return {
+      elapsedSeconds: secondsSince(order.kitchenStatusChangedAt || order.createdAt || order.date, nowMs),
+      remainingSeconds: 0,
+      durationSeconds: 0,
+      progress: 100,
+      nextStatus: null,
+      overdue: false
+    };
+  }
+
+  if (order.kdsTimer?.dueAt) {
+    const dueMs = new Date(order.kdsTimer.dueAt).getTime();
+    const changedMs = new Date(order.kdsTimer.changedAt || order.kitchenStatusChangedAt || order.createdAt || Date.now()).getTime();
+    const duration = Math.max(1, Math.floor((dueMs - changedMs) / 1000));
+    const elapsed = Math.max(0, Math.floor((nowMs - changedMs) / 1000));
+    const remaining = Math.ceil((dueMs - nowMs) / 1000);
+
+    return {
+      elapsedSeconds: elapsed,
+      remainingSeconds: Math.max(0, remaining),
+      durationSeconds: duration,
+      progress: Math.min(100, Math.round((elapsed / duration) * 100)),
+      nextStatus,
+      overdue: remaining <= 0
+    };
+  }
+
+  const changedAt = order.kitchenStatusChangedAt || order.updatedAt || order.createdAt || order.date || new Date().toISOString();
+  const elapsed = secondsSince(changedAt, nowMs);
+  const duration = statusMinutes(current, settings) * 60;
+  const remaining = duration - elapsed;
+
+  return {
+    elapsedSeconds: elapsed,
+    remainingSeconds: Math.max(0, remaining),
+    durationSeconds: duration,
+    progress: Math.min(100, Math.round((elapsed / duration) * 100)),
+    nextStatus,
+    overdue: remaining <= 0
+  };
 }
 
 function playBeep() {
@@ -91,39 +192,6 @@ function playBeep() {
   }
 }
 
-function nextStatusFor(order) {
-  const current = normalizeStatus(order.kitchenStatus || order.orderStatus);
-  const delivery = order.mode === "delivery";
-  const unpaid = order.paymentStatus === "unpaid" || String(order.paymentMethod || "").toLowerCase().includes("cash");
-
-  if (current === "new") return "preparing";
-  if (current === "preparing") return "ready";
-
-  if (!delivery) {
-    if (current === "ready") return "served";
-    return null;
-  }
-
-  if (current === "ready") return "rider_picked";
-  if (current === "rider_picked") return "rider_on_way";
-  if (current === "rider_on_way") return "rider_delivered";
-  if (current === "rider_delivered" && unpaid) return "cash_received";
-
-  return null;
-}
-
-function workflowSteps(order) {
-  if (order.mode === "delivery") {
-    const unpaid = order.paymentStatus === "unpaid" || String(order.paymentMethod || "").toLowerCase().includes("cash");
-
-    return unpaid
-      ? ["new", "preparing", "ready", "rider_picked", "rider_on_way", "rider_delivered", "cash_received"]
-      : ["new", "preparing", "ready", "rider_picked", "rider_on_way", "rider_delivered"];
-  }
-
-  return ["new", "preparing", "ready", "served"];
-}
-
 function SettingsModal({ settings, setSettings, onClose, onSave, saving }) {
   function update(key, value) {
     setSettings((prev) => ({
@@ -147,9 +215,9 @@ function SettingsModal({ settings, setSettings, onClose, onSave, saving }) {
         <div className="kds-modal-head">
           <div>
             <h2>KDS Auto Timer Settings</h2>
-            <p>Owner can adjust default kitchen and delivery workflow timers.</p>
+            <p>Owner can adjust exact kitchen and delivery timers.</p>
           </div>
-          <button className="kds-icon-btn" onClick={onClose}>✕</button>
+          <button className="kds-icon-btn" onClick={onClose}>×</button>
         </div>
 
         <label className="kds-toggle-row">
@@ -191,15 +259,15 @@ function SettingsModal({ settings, setSettings, onClose, onSave, saving }) {
   );
 }
 
-function KDSOrderCard({ order, isFresh, onUpdateStatus }) {
+function KDSOrderCard({ order, isFresh, settings, nowMs, onUpdateStatus }) {
   const current = normalizeStatus(order.kitchenStatus || order.orderStatus);
   const tone = statusTone(current);
   const items = Array.isArray(order.items) ? order.items : [];
-  const elapsed = minutesSince(order.kitchenStatusChangedAt || order.createdAt || order.date);
   const next = nextStatusFor(order);
   const steps = workflowSteps(order);
   const currentIndex = steps.indexOf(current);
   const customerName = `${order?.customer?.firstName || ""} ${order?.customer?.lastName || ""}`.trim();
+  const timer = getTimer(order, settings, nowMs);
 
   return (
     <div
@@ -221,10 +289,27 @@ function KDSOrderCard({ order, isFresh, onUpdateStatus }) {
         </div>
       </div>
 
+      <div className="kds-timer-box">
+        <div>
+          <span>Current Step</span>
+          <strong style={{ color: tone.color }}>{statusLabel(current)}</strong>
+        </div>
+
+        <div>
+          <span>{timer.nextStatus ? `Next: ${statusLabel(timer.nextStatus)}` : "Workflow Done"}</span>
+          <strong className={timer.overdue && timer.nextStatus ? "timer-overdue" : ""}>
+            {timer.nextStatus ? formatTimer(timer.remainingSeconds) : "DONE"}
+          </strong>
+        </div>
+      </div>
+
+      <div className="kds-progress">
+        <div style={{ width: `${timer.progress}%`, background: timer.overdue ? "#ef4444" : tone.color }} />
+      </div>
+
       <div className="kds-pill-row">
-        <span style={{ color: tone.color }}>{statusLabel(current)}</span>
         <span>{normalizeMode(order.mode)}</span>
-        <span>⏱ {elapsed} min</span>
+        <span>Elapsed {formatTimer(timer.elapsedSeconds)}</span>
         <span>{order.paymentStatus || "payment"}</span>
         {order.mode === "delivery" && order.riderName ? <span>🛵 {order.riderName}</span> : null}
         {order.table?.name ? <span>Table {order.table.name}</span> : null}
@@ -295,7 +380,9 @@ function KDSOrderCard({ order, isFresh, onUpdateStatus }) {
             <button onClick={() => onUpdateStatus(order, "rider_picked")}>Picked</button>
             <button onClick={() => onUpdateStatus(order, "rider_on_way")}>On Way</button>
             <button onClick={() => onUpdateStatus(order, "rider_delivered")}>Delivered</button>
-            <button onClick={() => onUpdateStatus(order, "cash_received")}>Cash Received</button>
+            {isUnpaidDelivery(order) ? (
+              <button onClick={() => onUpdateStatus(order, "cash_received")}>Cash Received</button>
+            ) : null}
           </>
         ) : (
           <button onClick={() => onUpdateStatus(order, "served")}>Served</button>
@@ -332,6 +419,7 @@ export default function KDSPanel({ token, onBack }) {
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [lastRefreshAt, setLastRefreshAt] = useState("");
   const [loading, setLoading] = useState(true);
+  const [nowMs, setNowMs] = useState(Date.now());
 
   const knownOrderIdsRef = useRef(new Set());
   const initialLoadDoneRef = useRef(false);
@@ -368,6 +456,7 @@ export default function KDSPanel({ token, onBack }) {
       setOrders(list);
       setSettings(res.data.settings || settings);
       setLastRefreshAt(new Date().toLocaleTimeString());
+      setNowMs(Date.now());
     } catch (error) {
       if (!silent) {
         alert(error.response?.data?.message || "Failed to load KDS board.");
@@ -385,6 +474,7 @@ export default function KDSPanel({ token, onBack }) {
       setSettings(res.data.settings);
       setSettingsOpen(false);
       alert("KDS timer settings saved.");
+      await loadBoard({ silent: true });
     } catch (error) {
       alert(error.response?.data?.message || "Failed to save KDS settings.");
     } finally {
@@ -410,6 +500,8 @@ export default function KDSPanel({ token, onBack }) {
       setOrders((prev) =>
         prev.map((item) => (item.id === order.id ? updatedOrder : item))
       );
+
+      setNowMs(Date.now());
     } catch (error) {
       alert(error.response?.data?.message || "Failed to update kitchen status.");
     }
@@ -420,11 +512,16 @@ export default function KDSPanel({ token, onBack }) {
   }, []);
 
   useEffect(() => {
+    const tick = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, []);
+
+  useEffect(() => {
     if (!autoRefreshEnabled) return;
 
     const interval = setInterval(() => {
       loadBoard({ silent: true });
-    }, 15000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [autoRefreshEnabled, soundEnabled]);
@@ -653,6 +750,13 @@ export default function KDSPanel({ token, onBack }) {
             font-size: 13px;
           }
 
+          .kds-customer-token {
+            margin-top: 5px;
+            color: #a5f3fc;
+            font-size: 13px;
+            font-weight: 900;
+          }
+
           .kds-status-icon {
             width: 58px;
             height: 58px;
@@ -661,6 +765,48 @@ export default function KDSPanel({ token, onBack }) {
             display: grid;
             place-items: center;
             font-size: 29px;
+          }
+
+          .kds-timer-box {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 20px;
+            background: rgba(2,6,23,.38);
+            border: 1px solid rgba(255,255,255,.08);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+          }
+
+          .kds-timer-box span {
+            display: block;
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 800;
+            margin-bottom: 4px;
+          }
+
+          .kds-timer-box strong {
+            font-size: 20px;
+            font-weight: 1000;
+          }
+
+          .timer-overdue {
+            color: #fca5a5 !important;
+          }
+
+          .kds-progress {
+            height: 9px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.08);
+            overflow: hidden;
+            margin-top: 9px;
+          }
+
+          .kds-progress div {
+            height: 100%;
+            border-radius: inherit;
+            transition: width .4s ease;
           }
 
           .kds-pill-row {
@@ -888,7 +1034,8 @@ export default function KDSPanel({ token, onBack }) {
             .kds-stats,
             .kds-toolbar,
             .kds-settings-grid,
-            .kds-modal-actions {
+            .kds-modal-actions,
+            .kds-timer-box {
               grid-template-columns: 1fr;
             }
 
@@ -904,7 +1051,7 @@ export default function KDSPanel({ token, onBack }) {
           <button className="kds-back" onClick={onBack}>← Back</button>
           <h1 className="kds-title">Kitchen Display System</h1>
           <p className="kds-sub">
-            Auto timer workflow: New → Preparing → Ready. Delivery adds rider workflow and cash received.
+            Accurate live timers with auto workflow: New → Preparing → Ready. Delivery adds rider and cash received steps.
           </p>
         </div>
 
@@ -914,7 +1061,7 @@ export default function KDSPanel({ token, onBack }) {
           </button>
 
           <button className="kds-soft-btn" onClick={() => setAutoRefreshEnabled((prev) => !prev)}>
-            Refresh {autoRefreshEnabled ? "Auto" : "Manual"}
+            Refresh {autoRefreshEnabled ? "Auto 5s" : "Manual"}
           </button>
 
           <button className="kds-soft-btn" onClick={() => setSettingsOpen(true)}>
@@ -977,6 +1124,8 @@ export default function KDSPanel({ token, onBack }) {
             <KDSOrderCard
               key={orderKey(order)}
               order={order}
+              settings={settings}
+              nowMs={nowMs}
               isFresh={freshOrderIds.includes(orderKey(order))}
               onUpdateStatus={updateOrderStatus}
             />

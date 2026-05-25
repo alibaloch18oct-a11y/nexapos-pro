@@ -13,6 +13,8 @@ const defaultSettings = {
   receiptNote: "Powered by NexaPOS Pro"
 };
 
+const payNowMethods = ["Cash", "Card", "Easypaisa", "JazzCash", "Bank Transfer"];
+
 function money(order, value) {
   return `${order?.currency || order?.restaurantSettings?.currency || "Rs"} ${Math.round(Number(value || 0)).toLocaleString()}`;
 }
@@ -79,6 +81,21 @@ function paymentBadge(order) {
   }
 
   return { label: status ? status.toUpperCase() : "UNKNOWN", sub: rawMethod || "No payment method", cls: "neutral" };
+}
+
+function orderNeedsPayment(order) {
+  const status = String(order?.paymentStatus || "").toLowerCase();
+  const method = String(order?.paymentMethod || "").toLowerCase();
+
+  if (status === "cancelled" || status === "paid" || status === "complimentary") return false;
+
+  return (
+    status === "unpaid" ||
+    method.includes("unpaid") ||
+    method.includes("pay later") ||
+    method.includes("cash on delivery") ||
+    method === "cod"
+  );
 }
 
 function safeItems(items) {
@@ -198,7 +215,7 @@ function EditOrderModal({ token, order, menuItems, onClose, onSaved }) {
             <p>Update items, quantities, and send changes back to kitchen.</p>
           </div>
 
-          <button className="orders-icon-btn" onClick={onClose}>✕</button>
+          <button className="orders-icon-btn" onClick={onClose}>?</button>
         </div>
 
         <div className="orders-edit-grid">
@@ -214,7 +231,7 @@ function EditOrderModal({ token, order, menuItems, onClose, onSaved }) {
                     <div>
                       <strong>{item.name}</strong>
                       <p>{item.category || item.subtitle || "Menu Item"}</p>
-                      <span>{money(order, item.price)} × {item.qty}</span>
+                      <span>{money(order, item.price)} � {item.qty}</span>
                     </div>
 
                     <div className="orders-edit-actions">
@@ -301,7 +318,82 @@ function EditOrderModal({ token, order, menuItems, onClose, onSaved }) {
   );
 }
 
-function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel }) {
+
+function PayOrderModal({ order, onClose, onPaid, paying }) {
+  const [method, setMethod] = useState("Cash");
+  const [reference, setReference] = useState("");
+  const [note, setNote] = useState("Customer paid unpaid bill.");
+
+  return (
+    <div className="orders-modal-backdrop">
+      <div className="orders-pay-modal">
+        <div className="orders-modal-head">
+          <div>
+            <h2>Pay Unpaid Bill</h2>
+            <p>{order.orderNo || "Order"} · {money(order, order.total)}</p>
+            <span className={`orders-payment-badge ${paymentBadge(order).cls}`}>
+              {paymentBadge(order).label}
+            </span>
+          </div>
+
+          <button className="orders-icon-btn" onClick={onClose}>×</button>
+        </div>
+
+        <div className="orders-pay-body">
+          <div className="orders-pay-amount-box">
+            <span>Total to Receive</span>
+            <strong>{money(order, order.total)}</strong>
+          </div>
+
+          <div className="orders-pay-method-grid">
+            {payNowMethods.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={`orders-pay-method ${method === item ? "active" : ""}`}
+                onClick={() => setMethod(item)}
+              >
+                <strong>{item}</strong>
+                <span>{item === "Card" ? "POS / Visa / Master" : item === "Cash" ? "Cash counter" : "Digital payment"}</span>
+              </button>
+            ))}
+          </div>
+
+          <label className="orders-pay-field">
+            <span>Reference / Transaction ID</span>
+            <input
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder="Optional"
+            />
+          </label>
+
+          <label className="orders-pay-field">
+            <span>Payment Note</span>
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Optional note"
+            />
+          </label>
+
+          <div className="orders-pay-actions">
+            <button className="orders-soft-btn" onClick={onClose}>Cancel</button>
+            <button
+              className="orders-primary-btn"
+              disabled={paying}
+              onClick={() => onPaid(order, { paymentMethod: method, paymentReference: reference, note })}
+            >
+              {paying ? "Saving..." : `Mark Paid / ${method}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel, onPay }) {
   const items = safeItems(order.items);
   const customerName = `${order?.customer?.firstName || ""} ${order?.customer?.lastName || ""}`.trim();
 
@@ -311,19 +403,19 @@ function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel }) {
         <div className="orders-modal-head">
           <div>
             <h2>{order.orderNo || "Order Details"}</h2>
-            <p>{normalizeMode(order.mode)} · {formatDate(order.createdAt || order.date)}</p>
+            <p>{normalizeMode(order.mode)} � {formatDate(order.createdAt || order.date)}</p>
             <span className={`orders-payment-badge ${paymentBadge(order).cls}`}>
               {paymentBadge(order).label}
             </span>
           </div>
 
-          <button className="orders-icon-btn" onClick={onClose}>✕</button>
+          <button className="orders-icon-btn" onClick={onClose}>?</button>
         </div>
 
         <div className="orders-details-grid">
           <main className="orders-details-main">
             <div className="orders-info-grid">
-              <div><span>Payment</span><strong>{paymentBadge(order).label} · {paymentBadge(order).sub}</strong></div>
+              <div><span>Payment</span><strong>{paymentBadge(order).label} � {paymentBadge(order).sub}</strong></div>
               <div><span>Customer</span><strong>{customerName || "Walk-in"}</strong></div>
               <div><span>Phone</span><strong>{order.phone || "N/A"}</strong></div>
               <div><span>Waiter</span><strong>{order.waiterName || "N/A"}</strong></div>
@@ -344,7 +436,7 @@ function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel }) {
                       <strong>{item.name}</strong>
                       <p>{item.category || item.subtitle || "Menu Item"}</p>
                     </div>
-                    <span>{qty} × {money(order, price)}</span>
+                    <span>{qty} � {money(order, price)}</span>
                     <strong>{money(order, qty * price)}</strong>
                   </div>
                 );
@@ -367,6 +459,12 @@ function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel }) {
 
             {order.paymentStatus !== "cancelled" ? (
               <>
+                {orderNeedsPayment(order) ? (
+                  <button className="orders-pay-now-btn" onClick={() => onPay(order)}>
+                    Pay Now
+                  </button>
+                ) : null}
+
                 <button className="orders-primary-btn" onClick={() => onEdit(order)}>
                   Edit Order
                 </button>
@@ -397,7 +495,7 @@ function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel }) {
   );
 }
 
-function OrderCard({ order, onView, onPrint, onEdit, onCancel }) {
+function OrderCard({ order, onView, onPrint, onEdit, onCancel, onPay }) {
   const customerName = `${order?.customer?.firstName || ""} ${order?.customer?.lastName || ""}`.trim();
 
   return (
@@ -407,7 +505,7 @@ function OrderCard({ order, onView, onPrint, onEdit, onCancel }) {
           <h3>{order.orderNo || "Order"}</h3>
           <p>{formatDate(order.createdAt || order.date)}</p>
         </div>
-        <div className="orders-card-icon">🧾</div>
+        <div className="orders-card-icon">??</div>
       </div>
 
       <div className={`orders-card-payment-top ${paymentBadge(order).cls}`}>
@@ -425,6 +523,9 @@ function OrderCard({ order, onView, onPrint, onEdit, onCancel }) {
       <div className="orders-card-total">{money(order, order.total)}</div>
 
       <div className="orders-card-actions">
+        {orderNeedsPayment(order) ? (
+          <button className="pay" onClick={() => onPay(order)}>Pay Now</button>
+        ) : null}
         <button onClick={() => onView(order)}>Details</button>
         <button onClick={() => onEdit(order)} disabled={order.paymentStatus === "cancelled"}>Edit</button>
         <button onClick={() => onPrint(order)} disabled={!["paid", "complimentary"].includes(order.paymentStatus)}>Receipt</button>
@@ -444,6 +545,8 @@ export default function OrdersPanel({ token, onBack }) {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [editOrder, setEditOrder] = useState(null);
   const [receiptOrder, setReceiptOrder] = useState(null);
+  const [payOrder, setPayOrder] = useState(null);
+  const [payingOrder, setPayingOrder] = useState(false);
   const [loading, setLoading] = useState(true);
 
   async function loadOrders() {
@@ -535,8 +638,39 @@ export default function OrdersPanel({ token, onBack }) {
   }
 
   function updateOrderInState(updatedOrder) {
-    setOrders((prev) => prev.map((item) => item.id === updatedOrder.id ? updatedOrder : item));
+    setOrders((prev) =>
+      prev.map((item) =>
+        item.id === updatedOrder.id || item.orderNo === updatedOrder.orderNo ? updatedOrder : item
+      )
+    );
     setSelectedOrder(null);
+  }
+
+  async function markOrderPaid(order, paymentData) {
+    setPayingOrder(true);
+
+    try {
+      const res = await api(token).patch(`/api/order-edit/${order.id || order.orderNo}/pay`, paymentData);
+      const updatedOrder = res.data.order;
+
+      setOrders((prev) =>
+        prev.map((item) =>
+          item.id === updatedOrder.id || item.orderNo === updatedOrder.orderNo ? updatedOrder : item
+        )
+      );
+
+      setSelectedOrder((prev) =>
+        prev && (prev.id === updatedOrder.id || prev.orderNo === updatedOrder.orderNo) ? updatedOrder : prev
+      );
+
+      setPayOrder(null);
+      setReceiptOrder(updatedOrder);
+      alert("Order marked as paid successfully.");
+    } catch (error) {
+      alert(error.response?.data?.message || "Failed to mark order as paid.");
+    } finally {
+      setPayingOrder(false);
+    }
   }
 
   return (
@@ -804,7 +938,7 @@ export default function OrdersPanel({ token, onBack }) {
 
           .orders-card-actions {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
             gap: 8px;
             margin-top: 12px;
           }
@@ -1036,6 +1170,109 @@ export default function OrdersPanel({ token, onBack }) {
             font-weight: 900;
           }
 
+
+          .orders-card-actions button.pay,
+          .orders-pay-now-btn {
+            background: linear-gradient(135deg,#22c55e,#16a34a) !important;
+            color: white !important;
+            border: 0 !important;
+          }
+
+          .orders-pay-modal {
+            width: min(620px, calc(100vw - 36px));
+            max-height: calc(100vh - 36px);
+            overflow-y: auto;
+            border-radius: 30px;
+            background: #0f172a;
+            border: 1px solid rgba(255,255,255,.12);
+            box-shadow: 0 30px 90px rgba(0,0,0,.45);
+          }
+
+          .orders-pay-body {
+            padding: 18px;
+            display: grid;
+            gap: 14px;
+          }
+
+          .orders-pay-amount-box {
+            border-radius: 24px;
+            padding: 18px;
+            background: linear-gradient(135deg, rgba(34,197,94,.16), rgba(34,211,238,.12));
+            border: 1px solid rgba(34,197,94,.25);
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+          }
+
+          .orders-pay-amount-box span {
+            color: #bbf7d0;
+            font-weight: 900;
+          }
+
+          .orders-pay-amount-box strong {
+            font-size: 30px;
+            font-weight: 1000;
+          }
+
+          .orders-pay-method-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+          }
+
+          .orders-pay-method {
+            min-height: 84px;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.065);
+            color: white;
+            cursor: pointer;
+            text-align: left;
+            padding: 12px;
+            display: grid;
+            gap: 5px;
+          }
+
+          .orders-pay-method.active {
+            background: rgba(34,197,94,.16);
+            border-color: rgba(34,197,94,.34);
+          }
+
+          .orders-pay-method span {
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 800;
+          }
+
+          .orders-pay-field {
+            display: grid;
+            gap: 8px;
+          }
+
+          .orders-pay-field span {
+            color: #cbd5e1;
+            font-size: 12px;
+            font-weight: 850;
+          }
+
+          .orders-pay-field input {
+            height: 45px;
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.07);
+            color: white;
+            padding: 0 13px;
+            outline: none;
+            font-weight: 800;
+          }
+
+          .orders-pay-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+          }
+
           @media (max-width: 1050px) {
             .orders-toolbar,
             .orders-details-grid,
@@ -1061,7 +1298,7 @@ export default function OrdersPanel({ token, onBack }) {
 
       <div className="orders-head">
         <div>
-          <button className="orders-back" onClick={onBack}>← Back</button>
+          <button className="orders-back" onClick={onBack}>? Back</button>
           <h1 className="orders-title">Orders Management</h1>
           <p className="orders-sub">Edit orders, add/delete items, cancel orders and reprint receipts.</p>
         </div>
@@ -1114,6 +1351,7 @@ export default function OrdersPanel({ token, onBack }) {
               onPrint={setReceiptOrder}
               onEdit={setEditOrder}
               onCancel={cancelOrder}
+              onPay={setPayOrder}
             />
           ))}
         </div>
@@ -1126,6 +1364,7 @@ export default function OrdersPanel({ token, onBack }) {
           onPrint={setReceiptOrder}
           onEdit={setEditOrder}
           onCancel={cancelOrder}
+          onPay={setPayOrder}
         />
       ) : null}
 
@@ -1139,6 +1378,15 @@ export default function OrdersPanel({ token, onBack }) {
         />
       ) : null}
 
+      {payOrder ? (
+        <PayOrderModal
+          order={payOrder}
+          onClose={() => setPayOrder(null)}
+          onPaid={markOrderPaid}
+          paying={payingOrder}
+        />
+      ) : null}
+
       {receiptOrder ? (
         <ThermalReceipt
           order={receiptOrder}
@@ -1149,4 +1397,6 @@ export default function OrdersPanel({ token, onBack }) {
     </div>
   );
 }
+
+
 

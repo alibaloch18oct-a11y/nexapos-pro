@@ -64,14 +64,6 @@ function getTenantSettings(db, tenantId) {
   };
 }
 
-function minutesSince(value) {
-  const date = new Date(value || Date.now()).getTime();
-
-  if (Number.isNaN(date)) return 0;
-
-  return Math.max(0, Math.floor((Date.now() - date) / 60000));
-}
-
 function normalizeStatus(order) {
   const status = order.kitchenStatus || order.orderStatus || "new";
 
@@ -79,6 +71,21 @@ function normalizeStatus(order) {
   if (status === "completed") return "served";
 
   return status;
+}
+
+function statusDurationMs(status, settings) {
+  const current = status === "placed" ? "new" : status;
+
+  const minutes = {
+    new: settings.newToPreparingMinutes,
+    preparing: settings.preparingToReadyMinutes,
+    ready: settings.readyToRiderPickedMinutes,
+    rider_picked: settings.riderPickedToOnWayMinutes,
+    rider_on_way: settings.riderOnWayToDeliveredMinutes,
+    rider_delivered: settings.deliveredToCashReceivedMinutes
+  }[current];
+
+  return Math.max(1, Number(minutes || 1)) * 60 * 1000;
 }
 
 function isDeliveryOrder(order) {
@@ -93,17 +100,36 @@ function isCashDelivery(order) {
     isDeliveryOrder(order) &&
     (
       paymentStatus === "unpaid" ||
-      method.includes("cash") ||
-      method.includes("cod") ||
+      method.includes("cash on delivery") ||
+      method === "cod" ||
       method.includes("pay later") ||
       method.includes("unpaid")
     )
   );
 }
 
-function setOrderStatus(order, nextStatus, actor = "system-auto-timer") {
+function nextStatusFor(order) {
+  const current = normalizeStatus(order);
+
+  if (current === "new") return "preparing";
+  if (current === "preparing") return "ready";
+
+  if (!isDeliveryOrder(order)) {
+    if (current === "ready") return "served";
+    return null;
+  }
+
+  if (current === "ready") return "rider_picked";
+  if (current === "rider_picked") return "rider_on_way";
+  if (current === "rider_on_way") return "rider_delivered";
+  if (current === "rider_delivered" && isCashDelivery(order)) return "cash_received";
+
+  return null;
+}
+
+function setOrderStatus(order, nextStatus, actor = "system-auto-timer", changedAt = new Date().toISOString()) {
   order.kitchenStatus = nextStatus;
-  order.kitchenStatusChangedAt = new Date().toISOString();
+  order.kitchenStatusChangedAt = changedAt;
   order.kitchenStatusChangedBy = actor;
   order.updatedAt = new Date().toISOString();
 
@@ -112,69 +138,92 @@ function setOrderStatus(order, nextStatus, actor = "system-auto-timer") {
   } else if (nextStatus === "cash_received") {
     order.paymentStatus = "paid";
     order.paymentMethod = order.paymentMethod || "Cash on Delivery";
+    order.cashReceivedAt = changedAt;
     order.orderStatus = "completed";
-  } else if (["rider_delivered"].includes(nextStatus)) {
+  } else if (nextStatus === "rider_delivered") {
     order.orderStatus = "served";
   } else if (!["cancelled", "held"].includes(order.orderStatus)) {
     order.orderStatus = "placed";
   }
 }
 
+function ensureKitchenClock(order) {
+  if (!order.kitchenStatus) {
+    order.kitchenStatus = normalizeStatus(order);
+  }
+
+  if (!order.kitchenStatusChangedAt) {
+    order.kitchenStatusChangedAt = order.createdAt || order.date || order.updatedAt || new Date().toISOString();
+  }
+}
+
 function autoProgressOrder(order, settings) {
-  if (!settings.autoEnabled) return null;
+  if (!settings.autoEnabled) return [];
 
-  const current = normalizeStatus(order);
+  ensureKitchenClock(order);
 
-  if (["cancelled", "served", "completed", "cash_received"].includes(current)) {
-    return null;
-  }
+  const progressed = [];
+  const now = Date.now();
+  let guard = 0;
 
-  const changedAt = order.kitchenStatusChangedAt || order.updatedAt || order.createdAt || order.date || new Date().toISOString();
-  const elapsed = minutesSince(changedAt);
+  while (guard < 8) {
+    guard += 1;
 
-  if (current === "new" && elapsed >= Number(settings.newToPreparingMinutes || 2)) {
-    setOrderStatus(order, "preparing");
-    return "preparing";
-  }
+    const current = normalizeStatus(order);
 
-  if (current === "preparing" && elapsed >= Number(settings.preparingToReadyMinutes || 8)) {
-    setOrderStatus(order, "ready");
-    return "ready";
-  }
-
-  if (isDeliveryOrder(order)) {
-    if (current === "ready" && elapsed >= Number(settings.readyToRiderPickedMinutes || 2)) {
-      setOrderStatus(order, "rider_picked");
-      return "rider_picked";
+    if (["cancelled", "served", "completed", "cash_received"].includes(current)) {
+      break;
     }
 
-    if (current === "rider_picked" && elapsed >= Number(settings.riderPickedToOnWayMinutes || 2)) {
-      setOrderStatus(order, "rider_on_way");
-      return "rider_on_way";
-    }
+    const nextStatus = nextStatusFor(order);
 
-    if (current === "rider_on_way" && elapsed >= Number(settings.riderOnWayToDeliveredMinutes || 20)) {
-      setOrderStatus(order, "rider_delivered");
-      return "rider_delivered";
-    }
+    if (!nextStatus) break;
 
-    if (
-      current === "rider_delivered" &&
-      isCashDelivery(order) &&
-      elapsed >= Number(settings.deliveredToCashReceivedMinutes || 3)
-    ) {
-      setOrderStatus(order, "cash_received");
-      return "cash_received";
-    }
+    const changedAtMs = new Date(order.kitchenStatusChangedAt || order.createdAt || Date.now()).getTime();
+
+    if (Number.isNaN(changedAtMs)) break;
+
+    const dueMs = statusDurationMs(current, settings);
+    const nextChangeMs = changedAtMs + dueMs;
+
+    if (now < nextChangeMs) break;
+
+    const nextChangedAt = new Date(nextChangeMs).toISOString();
+    setOrderStatus(order, nextStatus, "system-auto-timer", nextChangedAt);
+    progressed.push(nextStatus);
   }
 
-  return null;
+  return progressed;
 }
 
 function visibleKitchenOrder(order) {
   if (order.paymentStatus === "cancelled" || order.orderStatus === "cancelled") return false;
 
   return ["paid", "unpaid", "complimentary"].includes(order.paymentStatus);
+}
+
+function attachTimerMeta(order, settings) {
+  ensureKitchenClock(order);
+
+  const current = normalizeStatus(order);
+  const nextStatus = nextStatusFor(order);
+  const changedAtMs = new Date(order.kitchenStatusChangedAt || order.createdAt || Date.now()).getTime();
+  const durationMs = statusDurationMs(current, settings);
+  const dueAtMs = changedAtMs + durationMs;
+  const now = Date.now();
+
+  order.kdsTimer = {
+    currentStatus: current,
+    nextStatus,
+    changedAt: order.kitchenStatusChangedAt,
+    dueAt: nextStatus ? new Date(dueAtMs).toISOString() : null,
+    durationSeconds: Math.round(durationMs / 1000),
+    elapsedSeconds: Math.max(0, Math.floor((now - changedAtMs) / 1000)),
+    remainingSeconds: nextStatus ? Math.max(0, Math.ceil((dueAtMs - now) / 1000)) : 0,
+    autoEnabled: Boolean(settings.autoEnabled)
+  };
+
+  return order;
 }
 
 module.exports = function kdsAutoRoutes({ readDb, writeDb }) {
@@ -241,34 +290,34 @@ module.exports = function kdsAutoRoutes({ readDb, writeDb }) {
     );
 
     tenantOrders.forEach((order) => {
-      if (!order.kitchenStatusChangedAt) {
-        order.kitchenStatusChangedAt = order.createdAt || order.date || new Date().toISOString();
-        order.kitchenStatus = normalizeStatus(order);
-        changed = true;
-      }
+      const beforeStatus = normalizeStatus(order);
 
-      const nextStatus = autoProgressOrder(order, settings);
+      ensureKitchenClock(order);
 
-      if (nextStatus) {
+      const progressed = autoProgressOrder(order, settings);
+
+      if (progressed.length > 0 || beforeStatus !== normalizeStatus(order)) {
         changed = true;
 
         db.auditLogs.push({
-          id: `audit-${Date.now()}-${order.id}`,
+          id: `audit-${Date.now()}-${order.id || order.orderNo}`,
           tenantId: req.user.tenantId,
           action: "KDS_AUTO_STATUS_PROGRESS",
           actor: "system-auto-timer",
           details: {
             orderId: order.id,
             orderNo: order.orderNo,
-            nextStatus
+            progressed
           },
           createdAt: new Date().toISOString()
         });
       }
+
+      attachTimerMeta(order, settings);
     });
 
     const orders = tenantOrders.sort(
-      (a, b) => new Date(a.createdAt || a.date) - new Date(b.createdAt || b.date)
+      (a, b) => new Date(a.createdAt || a.date || 0) - new Date(b.createdAt || b.date || 0)
     );
 
     if (changed) {
@@ -277,7 +326,8 @@ module.exports = function kdsAutoRoutes({ readDb, writeDb }) {
 
     res.json({
       settings,
-      orders
+      orders,
+      serverTime: new Date().toISOString()
     });
   });
 
@@ -306,6 +356,8 @@ module.exports = function kdsAutoRoutes({ readDb, writeDb }) {
     }
 
     setOrderStatus(order, kitchenStatus, req.user.username);
+    const settings = getTenantSettings(db, req.user.tenantId);
+    attachTimerMeta(order, settings);
 
     db.auditLogs.push({
       id: `audit-${Date.now()}`,
