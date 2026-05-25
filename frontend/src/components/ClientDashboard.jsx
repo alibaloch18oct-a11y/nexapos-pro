@@ -2,67 +2,12 @@
 import { api } from "../lib/api";
 
 const mainModes = [
-  {
-    number: 1,
-    key: "walk_in",
-    name: "Walk In",
-    subtitle: "Counter customer",
-    icon: "🚶",
-    bg: "linear-gradient(135deg,#18181b,#020617)",
-    shadow: "rgba(15,23,42,.45)",
-    animation: "walkAnim"
-  },
-  {
-    number: 2,
-    key: "take_away",
-    name: "Take Away",
-    subtitle: "Fast pickup order",
-    icon: "🛍️",
-    bg: "linear-gradient(135deg,#38bdf8,#2563eb)",
-    shadow: "rgba(37,99,235,.38)",
-    animation: "bagAnim"
-  },
-  {
-    number: 3,
-    key: "delivery",
-    name: "Delivery",
-    subtitle: "Rider dispatch",
-    icon: "🛵",
-    bg: "linear-gradient(135deg,#fde047,#f97316)",
-    shadow: "rgba(249,115,22,.38)",
-    animation: "deliveryAnim"
-  },
-  {
-    number: 4,
-    key: "dine_in",
-    name: "Dine In",
-    subtitle: "Tables & waiter",
-    icon: "🍽️",
-    bg: "linear-gradient(135deg,#fb7185,#ef4444)",
-    shadow: "rgba(239,68,68,.38)",
-    animation: "dineAnim"
-  },
-  {
-    number: 5,
-    key: "drive_thru",
-    name: "Drive Thru",
-    subtitle: "Vehicle order",
-    icon: "🚗",
-    bg: "linear-gradient(135deg,#4ade80,#16a34a)",
-    shadow: "rgba(22,163,74,.38)",
-    animation: "driveAnim"
-  },
-  {
-    number: 6,
-    key: "kiosk",
-    name: "Kiosk",
-    subtitle: "Self ordering",
-    icon: "☝️",
-    bg: "linear-gradient(135deg,#ffe4e6,#f9a8d4)",
-    shadow: "rgba(244,114,182,.35)",
-    animation: "tapAnim",
-    dark: true
-  }
+  { number: 1, key: "walk_in", modeKey: "walk_in", name: "Walk In", subtitle: "Counter customer", icon: "🚶", bg: "linear-gradient(135deg,#18181b,#020617)", shadow: "rgba(15,23,42,.45)", animation: "walkAnim" },
+  { number: 2, key: "take_away", modeKey: "take_away", name: "Take Away", subtitle: "Fast pickup order", icon: "🛍️", bg: "linear-gradient(135deg,#38bdf8,#2563eb)", shadow: "rgba(37,99,235,.38)", animation: "bagAnim" },
+  { number: 3, key: "delivery", modeKey: "delivery", name: "Delivery", subtitle: "Rider dispatch", icon: "🛵", bg: "linear-gradient(135deg,#fde047,#f97316)", shadow: "rgba(249,115,22,.38)", animation: "deliveryAnim" },
+  { number: 4, key: "dine_in", modeKey: "dine_in", name: "Dine In", subtitle: "Tables & waiter", icon: "🍽️", bg: "linear-gradient(135deg,#fb7185,#ef4444)", shadow: "rgba(239,68,68,.38)", animation: "dineAnim" },
+  { number: 5, key: "drive_thru", modeKey: "drive_thru", name: "Drive Thru", subtitle: "Vehicle order", icon: "🚗", bg: "linear-gradient(135deg,#4ade80,#16a34a)", shadow: "rgba(22,163,74,.38)", animation: "driveAnim" },
+  { number: 6, key: "kiosk", modeKey: "kiosk", name: "Kiosk", subtitle: "Self ordering", icon: "☝️", bg: "linear-gradient(135deg,#ffe4e6,#f9a8d4)", shadow: "rgba(244,114,182,.35)", animation: "tapAnim", dark: true }
 ];
 
 const bottomModules = [
@@ -130,37 +75,35 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
   );
 
   function openModule(item) {
-  const sellingModes = ["walk_in", "take_away", "delivery", "drive_thru", "kiosk"];
+    const key = item.key;
+    const sellingModes = ["walk_in", "take_away", "delivery", "drive_thru", "kiosk"];
 
-  if (sellingModes.includes(item.key)) {
+    if (key === "dine_in") {
+      onOpenModule({
+        key: "dine_in",
+        modeKey: "dine_in",
+        name: "Dine In",
+        description: "Dine In tables"
+      });
+      return;
+    }
+
+    if (sellingModes.includes(key)) {
+      onOpenModule({
+        key,
+        modeKey: key,
+        name: item.name,
+        description: item.subtitle || `${item.name} POS mode`
+      });
+      return;
+    }
+
     onOpenModule({
-      key: item.key,
-      modeKey: item.key,
+      key,
       name: item.name,
-      description: item.subtitle || `${item.name} POS mode`,
-      openedAt: Date.now()
+      description: item.subtitle || `${item.name} module`
     });
-    return;
   }
-
-  if (item.key === "dine_in") {
-    onOpenModule({
-      key: "dine_in",
-      modeKey: "dine_in",
-      name: "Dine In",
-      description: "Dine In tables",
-      openedAt: Date.now()
-    });
-    return;
-  }
-
-  onOpenModule({
-    key: item.key,
-    name: item.name,
-    description: item.subtitle || `${item.name} module`,
-    openedAt: Date.now()
-  });
-}
 
   return (
     <div className="nexa-epos-dashboard">
