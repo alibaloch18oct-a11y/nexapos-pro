@@ -1035,7 +1035,8 @@ export default function POSScreen({ token, module, session, onBack }) {
       setLoyaltyRedeemPoints("");
 
       if (error.response?.status !== 404) {
-        alert(error.response?.data?.message || "Failed to lookup loyalty customer.");
+        setPhoneLookupStatus("new");
+        setPhoneLookupMessage("Customer not found in loyalty. You can continue order.");
       }
 
       return null;
@@ -2417,11 +2418,62 @@ export default function POSScreen({ token, module, session, onBack }) {
             </button>
           </label>
 
-          <label className="pos-field">
+                    <label className="pos-field pos-customer-picker-wrap">
             <span className="pos-label">Customer Information</span>
-            <button className="pos-soft-btn" onClick={() => setCustomerModal(true)}>
-              {customer.firstName ? `${customer.firstName} ${customer.lastName}`.trim() : "Add Customer"}
-            </button>
+
+            <div className="pos-customer-picker">
+              <input
+                className="pos-input"
+                value={customerSearch}
+                onChange={(e) => {
+                  setCustomerSearch(e.target.value);
+                  setCustomerDropdownOpen(true);
+                }}
+                onFocus={() => setCustomerDropdownOpen(true)}
+                placeholder="Search customer by name, phone, email..."
+              />
+
+              <button
+                type="button"
+                className="pos-soft-btn"
+                onClick={() => setCustomerModal(true)}
+              >
+                + New
+              </button>
+            </div>
+
+            {customerDropdownOpen ? (
+              <div className="pos-customer-dropdown">
+                {filteredCustomers.length === 0 ? (
+                  <button
+                    type="button"
+                    className="pos-customer-option empty"
+                    onClick={() => setCustomerModal(true)}
+                  >
+                    No customer found. Add new customer
+                  </button>
+                ) : (
+                  filteredCustomers.map((item) => (
+                    <button
+                      type="button"
+                      key={item.id || item.phone || customerDisplayName(item)}
+                      className={`pos-customer-option ${
+                        selectedCustomerId === (item.id || item.phone || customerDisplayName(item)) ? "active" : ""
+                      }`}
+                      onClick={() => applySelectedCustomer(item)}
+                    >
+                      <strong>{customerDisplayName(item)}</strong>
+                      <span>{item.phone || "No phone"} {item.email ? `· ${item.email}` : ""}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : null}
+
+            <div className="pos-selected-customer">
+              {customer.firstName ? `${customer.firstName} ${customer.lastName}`.trim() : phone ? "New customer" : "Walk-in customer"}
+              {phone ? ` · ${phone}` : ""}
+            </div>
           </label>
 
           {loyaltyCustomer ? (
@@ -2708,6 +2760,7 @@ export default function POSScreen({ token, module, session, onBack }) {
     </div>
   );
 }
+
 
 
 
