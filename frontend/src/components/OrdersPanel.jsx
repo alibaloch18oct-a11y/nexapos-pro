@@ -47,6 +47,40 @@ function statusColor(status) {
   return "#cbd5e1";
 }
 
+
+function paymentBadge(order) {
+  const status = String(order?.paymentStatus || "").toLowerCase();
+  const method = String(order?.paymentMethod || "").toLowerCase();
+  const rawMethod = order?.paymentMethod || "";
+
+  if (status === "cancelled") {
+    return { label: "CANCELLED", sub: "Order cancelled", cls: "cancelled" };
+  }
+
+  if (status === "complimentary" || method.includes("complimentary")) {
+    return { label: "COMPLIMENTARY", sub: "VIP / free order", cls: "comp" };
+  }
+
+  if (status === "unpaid" || method.includes("unpaid") || method.includes("pay later")) {
+    return { label: "UNPAID", sub: rawMethod || "Pay later", cls: "unpaid" };
+  }
+
+  if (method.includes("cash on delivery") || method === "cod") {
+    return { label: "COD / UNPAID", sub: "Cash on delivery", cls: "unpaid" };
+  }
+
+  if (status === "paid") {
+    if (method.includes("card")) return { label: "PAID / CARD", sub: rawMethod || "Card", cls: "paid" };
+    if (method.includes("cash")) return { label: "PAID / CASH", sub: rawMethod || "Cash", cls: "paid" };
+    if (method.includes("easy")) return { label: "PAID / EASYPAISA", sub: rawMethod, cls: "paid" };
+    if (method.includes("jazz")) return { label: "PAID / JAZZCASH", sub: rawMethod, cls: "paid" };
+    if (method.includes("bank")) return { label: "PAID / BANK", sub: rawMethod, cls: "paid" };
+    return { label: rawMethod ? `PAID / ${rawMethod.toUpperCase()}` : "PAID", sub: rawMethod || "Paid order", cls: "paid" };
+  }
+
+  return { label: status ? status.toUpperCase() : "UNKNOWN", sub: rawMethod || "No payment method", cls: "neutral" };
+}
+
 function safeItems(items) {
   return Array.isArray(items) ? items : [];
 }
@@ -164,7 +198,7 @@ function EditOrderModal({ token, order, menuItems, onClose, onSaved }) {
             <p>Update items, quantities, and send changes back to kitchen.</p>
           </div>
 
-          <button className="orders-icon-btn" onClick={onClose}>âœ•</button>
+          <button className="orders-icon-btn" onClick={onClose}>✕</button>
         </div>
 
         <div className="orders-edit-grid">
@@ -180,7 +214,7 @@ function EditOrderModal({ token, order, menuItems, onClose, onSaved }) {
                     <div>
                       <strong>{item.name}</strong>
                       <p>{item.category || item.subtitle || "Menu Item"}</p>
-                      <span>{money(order, item.price)} Ã— {item.qty}</span>
+                      <span>{money(order, item.price)} × {item.qty}</span>
                     </div>
 
                     <div className="orders-edit-actions">
@@ -277,16 +311,19 @@ function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel }) {
         <div className="orders-modal-head">
           <div>
             <h2>{order.orderNo || "Order Details"}</h2>
-            <p>{normalizeMode(order.mode)} Â· {formatDate(order.createdAt || order.date)}</p>
+            <p>{normalizeMode(order.mode)} · {formatDate(order.createdAt || order.date)}</p>
+            <span className={`orders-payment-badge ${paymentBadge(order).cls}`}>
+              {paymentBadge(order).label}
+            </span>
           </div>
 
-          <button className="orders-icon-btn" onClick={onClose}>âœ•</button>
+          <button className="orders-icon-btn" onClick={onClose}>✕</button>
         </div>
 
         <div className="orders-details-grid">
           <main className="orders-details-main">
             <div className="orders-info-grid">
-              <div><span>Payment</span><strong>{order.paymentStatus || "N/A"} Â· {order.paymentMethod || "N/A"}</strong></div>
+              <div><span>Payment</span><strong>{paymentBadge(order).label} · {paymentBadge(order).sub}</strong></div>
               <div><span>Customer</span><strong>{customerName || "Walk-in"}</strong></div>
               <div><span>Phone</span><strong>{order.phone || "N/A"}</strong></div>
               <div><span>Waiter</span><strong>{order.waiterName || "N/A"}</strong></div>
@@ -307,7 +344,7 @@ function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel }) {
                       <strong>{item.name}</strong>
                       <p>{item.category || item.subtitle || "Menu Item"}</p>
                     </div>
-                    <span>{qty} Ã— {money(order, price)}</span>
+                    <span>{qty} × {money(order, price)}</span>
                     <strong>{money(order, qty * price)}</strong>
                   </div>
                 );
@@ -370,11 +407,16 @@ function OrderCard({ order, onView, onPrint, onEdit, onCancel }) {
           <h3>{order.orderNo || "Order"}</h3>
           <p>{formatDate(order.createdAt || order.date)}</p>
         </div>
-        <div className="orders-card-icon">ðŸ§¾</div>
+        <div className="orders-card-icon">🧾</div>
+      </div>
+
+      <div className={`orders-card-payment-top ${paymentBadge(order).cls}`}>
+        <strong>{paymentBadge(order).label}</strong>
+        <span>{paymentBadge(order).sub}</span>
       </div>
 
       <div className="orders-pill-row">
-        <span style={{ color: statusColor(order.paymentStatus) }}>{order.paymentStatus || "unknown"}</span>
+        <span style={{ color: statusColor(order.paymentStatus) }}>{paymentBadge(order).label}</span>
         <span>{normalizeMode(order.mode)}</span>
         <span>{order.items?.length || 0} items</span>
         <span>{customerName || order.phone || "Walk-in"}</span>
@@ -577,6 +619,69 @@ export default function OrdersPanel({ token, onBack }) {
             opacity: .45;
             cursor: not-allowed;
           }
+
+
+          .orders-card-payment-top {
+            margin: 10px 0 8px;
+            padding: 10px 12px;
+            border-radius: 16px;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.06);
+          }
+
+          .orders-card-payment-top strong,
+          .orders-payment-badge {
+            font-size: 12px;
+            font-weight: 1000;
+            letter-spacing: .04em;
+          }
+
+          .orders-card-payment-top span {
+            font-size: 12px;
+            color: #cbd5e1;
+            font-weight: 800;
+          }
+
+          .orders-payment-badge {
+            display: inline-flex;
+            margin-top: 9px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.10);
+          }
+
+          .orders-card-payment-top.paid,
+          .orders-payment-badge.paid {
+            color: #86efac;
+            background: rgba(34,197,94,.13);
+            border-color: rgba(34,197,94,.25);
+          }
+
+          .orders-card-payment-top.unpaid,
+          .orders-payment-badge.unpaid {
+            color: #fde68a;
+            background: rgba(250,204,21,.13);
+            border-color: rgba(250,204,21,.25);
+          }
+
+          .orders-card-payment-top.comp,
+          .orders-payment-badge.comp {
+            color: #a5f3fc;
+            background: rgba(34,211,238,.13);
+            border-color: rgba(34,211,238,.25);
+          }
+
+          .orders-card-payment-top.cancelled,
+          .orders-payment-badge.cancelled {
+            color: #fca5a5;
+            background: rgba(239,68,68,.13);
+            border-color: rgba(239,68,68,.25);
+          }
+
 
           .orders-title {
             margin: 12px 0 4px;
@@ -956,7 +1061,7 @@ export default function OrdersPanel({ token, onBack }) {
 
       <div className="orders-head">
         <div>
-          <button className="orders-back" onClick={onBack}>â† Back</button>
+          <button className="orders-back" onClick={onBack}>← Back</button>
           <h1 className="orders-title">Orders Management</h1>
           <p className="orders-sub">Edit orders, add/delete items, cancel orders and reprint receipts.</p>
         </div>
@@ -1044,3 +1149,4 @@ export default function OrdersPanel({ token, onBack }) {
     </div>
   );
 }
+
