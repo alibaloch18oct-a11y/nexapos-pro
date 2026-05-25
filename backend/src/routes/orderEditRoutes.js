@@ -1,0 +1,213 @@
+const express = require("express");
+
+const router = express.Router();
+
+function ensureCollections(db) {
+  db.orders = Array.isArray(db.orders) ? db.orders : [];
+  db.auditLogs = Array.isArray(db.auditLogs) ? db.auditLogs : [];
+  return db;
+}
+
+function tenantOnly(req, res, next) {
+  if (!req.user?.tenantId) {
+    return res.status(403).json({
+      message: "Restaurant account access required."
+    });
+  }
+
+  next();
+}
+
+function normalizeItems(items) {
+  if (!Array.isArray(items)) return [];
+
+  return items
+    .filter((item) => item && item.name)
+    .map((item, index) => {
+      const qty = Math.max(1, Number(item.qty || item.quantity || 1));
+      const price = Math.max(0, Number(item.price || 0));
+
+      return {
+        ...item,
+        id: item.id || `edited-item-${Date.now()}-${index}`,
+        name: item.name,
+        category: item.category || "Menu",
+        subtitle: item.subtitle || item.category || "Menu Item",
+        price,
+        qty,
+        quantity: qty,
+        lineTotal: qty * price
+      };
+    });
+}
+
+function recalculateOrder(order, nextItems) {
+  const items = normalizeItems(nextItems);
+  const subtotal = items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.qty || 1), 0);
+
+  const systemDiscountAmount = Number(order.systemDiscountAmount || order.discountAmount || 0);
+  const loyaltyRedeemedAmount = Number(order.loyaltyRedeemedAmount || 0);
+  const safeDiscount = Math.min(subtotal, Math.max(0, systemDiscountAmount));
+
+  const discountedSubtotal = Math.max(0, subtotal - safeDiscount);
+  const taxPercent = Number(order.taxPercent || order.restaurantSettings?.taxPercent || 0);
+  const serviceChargePercent = Number(order.serviceChargePercent || order.restaurantSettings?.serviceChargePercent || 0);
+
+  const tax = Math.round(discountedSubtotal * (taxPercent / 100));
+  const serviceChargeAmount = Math.round(discountedSubtotal * (serviceChargePercent / 100));
+  const total = Math.max(0, discountedSubtotal + tax + serviceChargeAmount - loyaltyRedeemedAmount);
+
+  return {
+    items,
+    subtotal,
+    tax,
+    serviceChargeAmount,
+    total,
+    originalTotal: subtotal + tax + serviceChargeAmount,
+    discountAmount: safeDiscount + loyaltyRedeemedAmount,
+    systemDiscountAmount: safeDiscount,
+    loyaltyRedeemedAmount,
+    taxPercent,
+    serviceChargePercent
+  };
+}
+
+module.exports = function orderEditRoutes({ readDb, writeDb }) {
+  router.patch("/:orderId", tenantOnly, (req, res) => {
+    const { orderId } = req.params;
+    const db = ensureCollections(readDb());
+
+    const order = db.orders.find(
+      (item) =>
+        item.tenantId === req.user.tenantId &&
+        (item.id === orderId || item.orderNo === orderId)
+    );
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Order not found."
+      });
+    }
+
+    if (order.orderStatus === "cancelled" || order.paymentStatus === "cancelled") {
+      return res.status(400).json({
+        message: "Cancelled order cannot be edited."
+      });
+    }
+
+    const before = {
+      items: order.items,
+      subtotal: order.subtotal,
+      tax: order.tax,
+      serviceChargeAmount: order.serviceChargeAmount,
+      total: order.total,
+      orderStatus: order.orderStatus,
+      kitchenStatus: order.kitchenStatus
+    };
+
+    const recalculated = recalculateOrder(order, req.body.items);
+
+    order.items = recalculated.items;
+    order.subtotal = recalculated.subtotal;
+    order.tax = recalculated.tax;
+    order.serviceChargeAmount = recalculated.serviceChargeAmount;
+    order.total = recalculated.total;
+    order.originalTotal = recalculated.originalTotal;
+    order.discountAmount = recalculated.discountAmount;
+    order.systemDiscountAmount = recalculated.systemDiscountAmount;
+    order.loyaltyRedeemedAmount = recalculated.loyaltyRedeemedAmount;
+
+    order.orderInstructions = req.body.orderInstructions ?? order.orderInstructions;
+    order.customer = req.body.customer ?? order.customer;
+    order.phone = req.body.phone ?? order.phone;
+
+    order.orderStatus = req.body.orderStatus || order.orderStatus || "placed";
+    order.kitchenStatus = req.body.kitchenStatus || "placed";
+    order.editedAt = new Date().toISOString();
+    order.editedBy = req.user.username;
+    order.updatedAt = new Date().toISOString();
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "ORDER_EDITED",
+      actor: req.user.username,
+      details: {
+        orderId: order.id,
+        orderNo: order.orderNo,
+        before,
+        after: {
+          items: order.items,
+          subtotal: order.subtotal,
+          tax: order.tax,
+          serviceChargeAmount: order.serviceChargeAmount,
+          total: order.total,
+          orderStatus: order.orderStatus,
+          kitchenStatus: order.kitchenStatus
+        }
+      },
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: "Order updated successfully.",
+      order
+    });
+  });
+
+  router.patch("/:orderId/cancel", tenantOnly, (req, res) => {
+    const { orderId } = req.params;
+    const db = ensureCollections(readDb());
+
+    const order = db.orders.find(
+      (item) =>
+        item.tenantId === req.user.tenantId &&
+        (item.id === orderId || item.orderNo === orderId)
+    );
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Order not found."
+      });
+    }
+
+    const before = {
+      paymentStatus: order.paymentStatus,
+      orderStatus: order.orderStatus,
+      kitchenStatus: order.kitchenStatus
+    };
+
+    order.paymentStatus = "cancelled";
+    order.orderStatus = "cancelled";
+    order.kitchenStatus = "cancelled";
+    order.cancelReason = req.body.reason || "Cancelled from Orders Panel";
+    order.cancelledAt = new Date().toISOString();
+    order.cancelledBy = req.user.username;
+    order.updatedAt = new Date().toISOString();
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "ORDER_CANCELLED",
+      actor: req.user.username,
+      details: {
+        orderId: order.id,
+        orderNo: order.orderNo,
+        before,
+        reason: order.cancelReason
+      },
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: "Order cancelled successfully.",
+      order
+    });
+  });
+
+  return router;
+};

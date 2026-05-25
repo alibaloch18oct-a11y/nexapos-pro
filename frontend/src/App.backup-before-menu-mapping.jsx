@@ -1,0 +1,312 @@
+﻿import React, { useEffect, useState } from "react";
+import { Sparkles } from "lucide-react";
+import { api } from "./lib/api";
+import { posModuleKeys } from "./lib/data";
+
+import LoginPage from "./components/LoginPage";
+import TopBar from "./components/TopBar";
+import SuperAdminDashboard from "./components/SuperAdminDashboard";
+import ClientDashboard from "./components/ClientDashboard";
+import POSScreen from "./components/POSScreen";
+import OrdersPanel from "./components/OrdersPanel";
+import KDSPanel from "./components/KDSPanel";
+import DineInTableLayout from "./components/DineInTableLayout";
+import MenuAdminPanel from "./components/MenuAdminPanel";
+import InventoryPanel from "./components/InventoryPanel";
+import DiscountPanel from "./components/DiscountPanel";
+import StaffPanel from "./components/StaffPanel";
+import RestaurantSettingsPanel from "./components/RestaurantSettingsPanel";
+import PackageBuilderPanel from "./components/PackageBuilderPanel";
+import SubscriptionPanel from "./components/SubscriptionPanel";
+import AnalyticsPanel from "./components/AnalyticsPanel";
+import StockMovementPanel from "./components/StockMovementPanel";
+import MenuInventoryMappingPanel from "./components/MenuInventoryMappingPanel";
+
+function LoadingScreen() {
+  return (
+    <div className="nexa-center">
+      <div className="nexa-login-card" style={{ textAlign: "center" }}>
+        <div className="nexa-logo-box">
+          <Sparkles size={42} />
+        </div>
+        <h2 className="nexa-login-heading">NexaPOS Pro</h2>
+        <p className="nexa-login-sub">Loading premium POS engine...</p>
+      </div>
+    </div>
+  );
+}
+
+function LockScreen({ message, expiryDate, onLogout }) {
+  return (
+    <div className="nexa-center">
+      <div className="nexa-login-card" style={{ textAlign: "center", maxWidth: 520 }}>
+        <div className="nexa-logo-box" style={{ margin: "0 auto" }}>
+          <Sparkles size={42} />
+        </div>
+        <h2 className="nexa-login-heading">Subscription Locked</h2>
+        <p className="nexa-login-sub">
+          {message || "Your subscription is expired. Please contact super admin."}
+        </p>
+
+        {expiryDate ? (
+          <div className="nexa-pill" style={{ marginTop: 14 }}>
+            Expired on {expiryDate}
+          </div>
+        ) : null}
+
+        <button className="nexa-create-btn" onClick={onLogout} style={{ width: "100%", marginTop: 18 }}>
+          Logout
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [token, setToken] = useState(localStorage.getItem("nexapos_token"));
+  const [session, setSession] = useState(null);
+  const [checking, setChecking] = useState(true);
+  const [activeModule, setActiveModule] = useState(null);
+  const [subscriptionLock, setSubscriptionLock] = useState(null);
+
+  async function refreshSession() {
+    const savedToken = localStorage.getItem("nexapos_token");
+
+    if (!savedToken) {
+      setChecking(false);
+      setSession(null);
+      setToken(null);
+      return;
+    }
+
+    try {
+      const res = await api(savedToken).get("/api/me");
+      setSession(res.data);
+      setToken(savedToken);
+      setSubscriptionLock(null);
+    } catch (error) {
+      if (error.response?.data?.subscriptionLocked) {
+        setSubscriptionLock(error.response.data);
+        setToken(savedToken);
+      } else {
+        localStorage.removeItem("nexapos_token");
+        setSession(null);
+        setToken(null);
+      }
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  useEffect(() => {
+    refreshSession();
+  }, []);
+
+  function onLogin(data) {
+    setToken(data.token);
+    setSession(data);
+    setSubscriptionLock(null);
+  }
+
+  function logout() {
+    localStorage.removeItem("nexapos_token");
+    setToken(null);
+    setSession(null);
+    setActiveModule(null);
+    setSubscriptionLock(null);
+  }
+
+  function closeModule() {
+    setActiveModule(null);
+  }
+
+  if (checking) return <LoadingScreen />;
+
+  if (subscriptionLock) {
+    return (
+      <LockScreen
+        message={subscriptionLock.message}
+        expiryDate={subscriptionLock.expiryDate}
+        onLogout={logout}
+      />
+    );
+  }
+
+  if (!session) return <LoginPage onLogin={onLogin} />;
+
+  if (activeModule?.key === "super_packages") {
+    return <PackageBuilderPanel token={token} onBack={closeModule} />;
+  }
+
+  if (activeModule?.key === "super_subscriptions") {
+    return <SubscriptionPanel token={token} onBack={closeModule} />;
+  }
+
+  if (
+    activeModule?.key === "analytics" ||
+    activeModule?.key === "reports" ||
+    activeModule?.key === "profit_loss"
+  ) {
+    return (
+      <AnalyticsPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
+  }
+
+  if (
+    activeModule?.key === "menu_inventory_mapping" ||
+    activeModule?.key === "recipe_mapping"
+  ) {
+    return (
+      <MenuInventoryMappingPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
+  }
+
+  if (
+    activeModule?.key === "stock_movements" ||
+    activeModule?.key === "stock_history"
+  ) {
+    return (
+      <StockMovementPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
+  }
+
+  if (activeModule?.key === "orders") {
+    return <OrdersPanel token={token} onBack={closeModule} />;
+  }
+
+  if (activeModule?.key === "kds") {
+    return <KDSPanel token={token} onBack={closeModule} />;
+  }
+
+  if (activeModule?.key === "settings") {
+    return (
+      <MenuAdminPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
+  }
+
+  if (
+    activeModule?.key === "restaurant_settings" ||
+    activeModule?.key === "branding" ||
+    activeModule?.key === "receipt_settings"
+  ) {
+    return (
+      <RestaurantSettingsPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
+  }
+
+  if (activeModule?.key === "inventory") {
+    return (
+      <InventoryPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
+  }
+
+  if (activeModule?.key === "discounts" || activeModule?.key === "discount") {
+    return (
+      <DiscountPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
+  }
+
+  if (
+    activeModule?.key === "staff" ||
+    activeModule?.key === "waiters" ||
+    activeModule?.key === "riders"
+  ) {
+    return (
+      <StaffPanel
+        token={token}
+        session={session}
+        onBack={closeModule}
+      />
+    );
+  }
+
+  if (activeModule?.key === "dine_in") {
+    return (
+      <DineInTableLayout
+        token={token}
+        session={session}
+        onBack={closeModule}
+        onOpenOrder={(table) =>
+          setActiveModule({
+            key: "dine_in_pos",
+            modeKey: "dine_in",
+            name: `Dine In - Table ${table.name}`,
+            table
+          })
+        }
+      />
+    );
+  }
+
+  if (activeModule?.key === "dine_in_pos") {
+    return (
+      <POSScreen
+        token={token}
+        module={activeModule}
+        session={session}
+        onBack={() => setActiveModule({ key: "dine_in", name: "Dine In" })}
+      />
+    );
+  }
+
+  if (activeModule && posModuleKeys.includes(activeModule.key)) {
+    return (
+      <POSScreen
+        token={token}
+        module={activeModule}
+        session={session}
+        onBack={closeModule}
+      />
+    );
+  }
+
+  return (
+    <div className="nexa-page">
+      <TopBar session={session} onLogout={logout} />
+
+      {session.user?.role === "super_admin" ? (
+        <SuperAdminDashboard
+          token={token}
+          refreshSession={refreshSession}
+          onOpenModule={setActiveModule}
+        />
+      ) : (
+        <ClientDashboard
+          token={token}
+          session={session}
+          onOpenModule={setActiveModule}
+        />
+      )}
+    </div>
+  );
+}
+
+export default App;

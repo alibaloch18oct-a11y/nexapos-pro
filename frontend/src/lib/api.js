@@ -1,0 +1,35 @@
+import axios from "axios";
+
+export const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+export function api(token) {
+  return axios.create({
+    baseURL: API_URL,
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
+}
+
+export function formatMode(key) {
+  const map = {
+    walk_in: "Walk In",
+    take_away: "Take Away",
+    delivery: "Delivery",
+    dine_in: "Dine In",
+    dine_in_pos: "Dine In",
+    drive_thru: "Drive Thru",
+    kiosk: "Kiosk"
+  };
+
+  return map[key] || key;
+}
+
+export function getOrderMode(module) {
+  if (module?.modeKey) return module.modeKey;
+  if (module?.key === "dine_in_pos") return "dine_in";
+  return module?.key || "walk_in";
+}
+
+export function formatTime(dateString) {
+  if (!dateString) return "";
+  return new Date(dateString).toLocaleTimeString();
+}

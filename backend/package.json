@@ -1,0 +1,30 @@
+{
+  "name": "nexapos-pro-backend",
+  "version": "1.0.0",
+  "description": "NexaPOS Pro Backend - Multi Tenant POS System",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js"
+  },
+  "keywords": [
+    "pos",
+    "restaurant",
+    "saas",
+    "multi-tenant"
+  ],
+  "author": "Shazee",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.21.0",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
