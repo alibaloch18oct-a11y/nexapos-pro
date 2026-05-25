@@ -1354,7 +1354,6 @@ app.patch("/api/orders/:orderId/payment", requireAuth, tenantOnly, (req, res) =>
 });
 
 app.use("/api/super-admin-control", requireAuth, superAdminControlRoutes({ readDb, writeDb }));
-
 app.listen(PORT, () => {
   console.log(`NexaPOS Pro backend running on http://localhost:${PORT}`);
 });
@@ -1386,6 +1385,5 @@ app.use("/api/kds-auto", requireAuth, kdsAutoRoutes({ readDb, writeDb }));
 
 
 app.use("/api/tables", requireAuth, tableAdvancedRoutes({ readDb, writeDb }));
-
 
 
