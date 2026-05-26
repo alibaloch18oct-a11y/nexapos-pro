@@ -129,6 +129,9 @@ function nextStatusFor(order) {
 
 function setOrderStatus(order, nextStatus, actor = "system-auto-timer", changedAt = new Date().toISOString()) {
   order.kitchenStatus = nextStatus;
+  if (order.mode === "delivery") {
+    order.delivery = { ...(order.delivery || {}), dispatchStatus: nextStatus };
+  }
   order.kitchenStatusChangedAt = changedAt;
   order.kitchenStatusChangedBy = actor;
   order.updatedAt = new Date().toISOString();
@@ -141,6 +144,7 @@ function setOrderStatus(order, nextStatus, actor = "system-auto-timer", changedA
     order.cashReceivedAt = changedAt;
     order.orderStatus = "completed";
   } else if (nextStatus === "rider_delivered") {
+    order.deliveredAt = changedAt;
     order.orderStatus = "served";
   } else if (!["cancelled", "held"].includes(order.orderStatus)) {
     order.orderStatus = "placed";
@@ -382,3 +386,5 @@ module.exports = function kdsAutoRoutes({ readDb, writeDb }) {
 
   return router;
 };
+
+

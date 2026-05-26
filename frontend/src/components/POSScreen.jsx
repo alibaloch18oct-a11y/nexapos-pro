@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { api, formatMode, getOrderMode } from "../lib/api";
 import { paymentMethods as sharedPaymentMethods } from "../lib/data";
 import ThermalReceipt from "./ThermalReceipt";
@@ -234,7 +234,7 @@ function categoryEmoji(category) {
 
 function safeDisplayIcon(value, fallback) {
   const raw = String(value || "").trim();
-  if (!raw || raw.includes("?") || raw.includes("�") || raw.includes("ð")) return fallback;
+  if (!raw || raw.includes("?") || raw.includes("?") || raw.includes("�")) return fallback;
   return raw;
 }
 
@@ -776,6 +776,7 @@ export default function POSScreen({ token, module, session, onBack }) {
   const [paymentModal, setPaymentModal] = useState(false);
 
   const [phone, setPhone] = useState(module?.driveThruTicket?.phone || "");
+  const [deliveryAddress, setDeliveryAddress] = useState(module?.deliveryAddress || "");
   const [customer, setCustomer] = useState({
     firstName: module?.driveThruTicket?.customerName || "",
     lastName: "",
@@ -806,6 +807,12 @@ export default function POSScreen({ token, module, session, onBack }) {
 
   const screenTitle = module?.name || formatMode(rawMode || orderMode || "POS");
 
+  useEffect(() => {
+    if (orderMode === "delivery" && selectedPaymentMethod === "Cash") {
+      setSelectedPaymentMethod("Cash on Delivery");
+    }
+  }, [orderMode]);
+
   function customerDisplayName(item) {
     const full =
       `${item?.firstName || ""} ${item?.lastName || ""}`.trim() ||
@@ -834,6 +841,10 @@ export default function POSScreen({ token, module, session, onBack }) {
       email: item.email || prev.email || "",
       instructions: prev.instructions || item.notes || item.address || ""
     }));
+
+    if (item.address) {
+      setDeliveryAddress(item.address);
+    }
 
     if (item.phone) {
       setPhone(item.phone);
@@ -1134,11 +1145,43 @@ export default function POSScreen({ token, module, session, onBack }) {
     }
   }
 
+  function validateDeliveryFields() {
+    if (orderMode !== "delivery") return true;
+
+    const fullName = `${customer.firstName || ""} ${customer.lastName || ""}`.trim();
+    const cleanPhone = String(phone || "").trim();
+    const cleanAddress = String(deliveryAddress || "").trim();
+
+    if (!fullName) {
+      alert("Delivery customer name is required before checkout.");
+      return false;
+    }
+
+    if (!cleanPhone) {
+      alert("Delivery phone number is required before checkout.");
+      return false;
+    }
+
+    if (!cleanAddress) {
+      alert("Delivery address is required before checkout.");
+      return false;
+    }
+
+    if (!selectedRiderId) {
+      alert("Please select rider for delivery.");
+      return false;
+    }
+
+    return true;
+  }
+
   async function openPayment() {
     if (!cart.length) {
       alert("Cart is empty.");
       return;
     }
+
+    if (!validateDeliveryFields()) return;
 
     setPaymentModal(true);
     await calculateDiscounts(selectedPaymentMethod);
@@ -1218,8 +1261,7 @@ export default function POSScreen({ token, module, session, onBack }) {
       return;
     }
 
-    if (orderMode === "delivery" && !selectedRiderId) {
-      alert("Please select rider for delivery.");
+    if (!validateDeliveryFields()) {
       return;
     }
 
@@ -1251,6 +1293,20 @@ export default function POSScreen({ token, module, session, onBack }) {
         driveThruVehicleNo: driveThruTicket?.vehicleNo || "",
         driveThruVehicleColor: driveThruTicket?.vehicleColor || "",
         driveThruVehicleType: driveThruTicket?.vehicleType || "",
+        delivery: orderMode === "delivery"
+          ? {
+              customerName: `${customer.firstName || ""} ${customer.lastName || ""}`.trim(),
+              phone: String(phone || "").trim(),
+              address: String(deliveryAddress || "").trim(),
+              riderId: selectedRiderId,
+              riderName: selectedRider?.name || "",
+              dispatchStatus: "new",
+              cashCollectionRequired: paymentStatus === "unpaid"
+            }
+          : null,
+        deliveryAddress: orderMode === "delivery" ? String(deliveryAddress || "").trim() : "",
+        deliveryCustomerName: orderMode === "delivery" ? `${customer.firstName || ""} ${customer.lastName || ""}`.trim() : "",
+        deliveryPhone: orderMode === "delivery" ? String(phone || "").trim() : "",
         items: cart,
         customer,
         phone,
@@ -2462,6 +2518,30 @@ export default function POSScreen({ token, module, session, onBack }) {
             margin-bottom: 12px;
           }
 
+
+
+          .pos-delivery-box {
+            display: grid;
+            gap: 10px;
+            padding: 12px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, rgba(34,211,238,.12), rgba(37,99,235,.08));
+            border: 1px solid rgba(34,211,238,.22);
+          }
+
+          .pos-delivery-box-title {
+            color: #a5f3fc;
+            font-weight: 1000;
+            font-size: 14px;
+          }
+
+          .pos-delivery-required {
+            color: #fde68a;
+            font-size: 12px;
+            font-weight: 850;
+            margin-top: -4px;
+          }
+
           .pos-selected-staff {
             margin-top: 7px;
             padding: 8px 10px;
@@ -2519,7 +2599,7 @@ export default function POSScreen({ token, module, session, onBack }) {
       <div className="pro-pos-layout">
         <aside className="pro-panel pos-left">
           <button className="pos-back-btn" onClick={onBack}>
-            ? Back
+            Back
           </button>
 
           <div className="pos-title-card">
@@ -2553,6 +2633,51 @@ export default function POSScreen({ token, module, session, onBack }) {
               {phone || "Add Phone Number"}
             </button>
           </label>
+
+          {orderMode === "delivery" ? (
+            <div className="pos-delivery-box">
+              <div className="pos-delivery-box-title">Delivery Details - Required</div>
+              <div className="pos-delivery-required">Name, phone, address and rider are compulsory before checkout.</div>
+
+              <label className="pos-field">
+                <span className="pos-label">Customer Name *</span>
+                <input
+                  className="pos-input"
+                  value={`${customer.firstName || ""} ${customer.lastName || ""}`.trim()}
+                  onChange={(e) => {
+                    const parts = e.target.value.split(" ");
+                    setCustomer((prev) => ({
+                      ...prev,
+                      firstName: parts[0] || "",
+                      lastName: parts.slice(1).join(" ") || ""
+                    }));
+                    setCustomerSearch(e.target.value);
+                  }}
+                  placeholder="Customer full name"
+                />
+              </label>
+
+              <label className="pos-field">
+                <span className="pos-label">Phone Number *</span>
+                <input
+                  className="pos-input"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="03xxxxxxxxx"
+                />
+              </label>
+
+              <label className="pos-field">
+                <span className="pos-label">Delivery Address *</span>
+                <input
+                  className="pos-input"
+                  value={deliveryAddress}
+                  onChange={(e) => setDeliveryAddress(e.target.value)}
+                  placeholder="House, street, area, city"
+                />
+              </label>
+            </div>
+          ) : null}
 
                     <label className="pos-field pos-customer-picker-wrap">
             <span className="pos-label">Customer Information</span>
@@ -2740,12 +2865,12 @@ export default function POSScreen({ token, module, session, onBack }) {
               <div>
                 <h3 style={{ margin: 0 }}>Checkout Panel</h3>
                 <div className="pos-small-muted">
-                  {cart.length} items in cart · {screenTitle}
+                  {cart.length} items in cart � {screenTitle}
                 </div>
               </div>
 
               <button className="pos-ghost-btn" onClick={() => setLastReceiptOrder(lastReceiptOrder)}>
-                🧾
+                Receipt
               </button>
             </div>
 
@@ -2926,3 +3051,5 @@ export default function POSScreen({ token, module, session, onBack }) {
     </div>
   );
 }
+
+
