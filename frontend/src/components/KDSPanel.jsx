@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 
 function normalizeMode(mode) {
@@ -41,14 +41,41 @@ function statusLabel(status) {
 function statusTone(status) {
   const current = normalizeStatus(status);
 
-  if (current === "new") return { color: "#a5f3fc", bg: "rgba(34,211,238,.13)", border: "rgba(34,211,238,.30)", icon: "NEW" };
-  if (current === "preparing") return { color: "#fde68a", bg: "rgba(250,204,21,.13)", border: "rgba(250,204,21,.30)", icon: "COOK" };
-  if (current === "ready") return { color: "#86efac", bg: "rgba(34,197,94,.13)", border: "rgba(34,197,94,.30)", icon: "READY" };
-  if (current === "rider_picked") return { color: "#c4b5fd", bg: "rgba(168,85,247,.13)", border: "rgba(168,85,247,.30)", icon: "PICK" };
-  if (current === "rider_on_way") return { color: "#93c5fd", bg: "rgba(59,130,246,.13)", border: "rgba(59,130,246,.30)", icon: "WAY" };
-  if (current === "rider_delivered") return { color: "#bbf7d0", bg: "rgba(22,163,74,.13)", border: "rgba(22,163,74,.30)", icon: "DONE" };
-  if (current === "cash_received") return { color: "#fef08a", bg: "rgba(234,179,8,.13)", border: "rgba(234,179,8,.30)", icon: "CASH" };
-  if (current === "cancelled") return { color: "#fca5a5", bg: "rgba(239,68,68,.13)", border: "rgba(239,68,68,.30)", icon: "X" };
+  if (current === "new") {
+    return { color: "#a5f3fc", bg: "rgba(34,211,238,.13)", border: "rgba(34,211,238,.30)", icon: "NEW" };
+  }
+
+  if (current === "preparing") {
+    return { color: "#fde68a", bg: "rgba(250,204,21,.13)", border: "rgba(250,204,21,.30)", icon: "COOK" };
+  }
+
+  if (current === "ready") {
+    return { color: "#86efac", bg: "rgba(34,197,94,.13)", border: "rgba(34,197,94,.30)", icon: "READY" };
+  }
+
+  if (current === "rider_picked") {
+    return { color: "#c4b5fd", bg: "rgba(168,85,247,.13)", border: "rgba(168,85,247,.30)", icon: "PICK" };
+  }
+
+  if (current === "rider_on_way") {
+    return { color: "#93c5fd", bg: "rgba(59,130,246,.13)", border: "rgba(59,130,246,.30)", icon: "RIDE" };
+  }
+
+  if (current === "rider_delivered") {
+    return { color: "#bbf7d0", bg: "rgba(22,163,74,.13)", border: "rgba(22,163,74,.30)", icon: "DONE" };
+  }
+
+  if (current === "cash_received") {
+    return { color: "#fef08a", bg: "rgba(234,179,8,.13)", border: "rgba(234,179,8,.30)", icon: "COD" };
+  }
+
+  if (current === "served" || current === "completed") {
+    return { color: "#bbf7d0", bg: "rgba(22,163,74,.13)", border: "rgba(22,163,74,.30)", icon: "SERVED" };
+  }
+
+  if (current === "cancelled") {
+    return { color: "#fca5a5", bg: "rgba(239,68,68,.13)", border: "rgba(239,68,68,.30)", icon: "X" };
+  }
 
   return { color: "#cbd5e1", bg: "rgba(255,255,255,.08)", border: "rgba(255,255,255,.12)", icon: "KDS" };
 }
@@ -217,7 +244,7 @@ function SettingsModal({ settings, setSettings, onClose, onSave, saving }) {
             <h2>KDS Auto Timer Settings</h2>
             <p>Owner can adjust exact kitchen and delivery timers.</p>
           </div>
-          <button className="kds-icon-btn" onClick={onClose}>�</button>
+          <button className="kds-icon-btn" onClick={onClose}>ï¿½</button>
         </div>
 
         <label className="kds-toggle-row">
@@ -766,7 +793,7 @@ export default function KDSPanel({ token, onBack }) {
             border: 1px solid;
             display: grid;
             place-items: center;
-            font-size: 29px;
+            font-size: 11px; font-weight: 1000; letter-spacing: .04em; padding: 0 6px; text-align: center;
           }
 
           .kds-timer-box {
@@ -1136,7 +1163,7 @@ export default function KDSPanel({ token, onBack }) {
       )}
 
       <p className="kds-muted">
-        Last refresh: {lastRefreshAt || "Not refreshed"} � Auto timer: {settings.autoEnabled ? "Enabled" : "Disabled"}
+        Last refresh: {lastRefreshAt || "Not refreshed"} ï¿½ Auto timer: {settings.autoEnabled ? "Enabled" : "Disabled"}
       </p>
 
       {settingsOpen ? (
@@ -1151,6 +1178,7 @@ export default function KDSPanel({ token, onBack }) {
     </div>
   );
 }
+
 
 
 

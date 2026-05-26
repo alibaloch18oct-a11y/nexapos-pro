@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { api, formatMode, getOrderMode } from "../lib/api";
 import { paymentMethods as sharedPaymentMethods } from "../lib/data";
 import ThermalReceipt from "./ThermalReceipt";
@@ -234,7 +234,7 @@ function categoryEmoji(category) {
 
 function safeDisplayIcon(value, fallback) {
   const raw = String(value || "").trim();
-  if (!raw || raw.includes("?") || raw.includes("?") || raw.includes("�")) return fallback;
+  if (!raw || raw.includes("?") || raw.includes("?") || raw.includes("ï¿½")) return fallback;
   return raw;
 }
 
@@ -444,6 +444,7 @@ function CustomerModal({ customer, setCustomer, onClose }) {
 }
 
 function PaymentModal({
+  orderMode,
   settings,
   subtotal,
   taxAmount,
@@ -472,6 +473,26 @@ function PaymentModal({
   const discountedSubtotal = Math.max(0, subtotal - finalDiscount);
   const availablePoints = Number(loyaltyCustomer?.loyaltyPoints || 0);
   const maxRedeem = Math.min(availablePoints, Math.floor(grandTotal));
+
+  const visiblePaymentMethods = [
+    ...new Set(
+      paymentMethods
+        .map((method) => {
+          if (orderMode === "delivery" && String(method).toLowerCase() === "cash") {
+            return "Cash on Delivery";
+          }
+
+          return method;
+        })
+        .filter((method) => {
+          if (orderMode === "delivery") {
+            return String(method).toLowerCase() !== "cash";
+          }
+
+          return String(method).toLowerCase() !== "cash on delivery";
+        })
+    )
+  ];
   const [splitEnabled, setSplitEnabled] = useState(false);
   const [splitCount, setSplitCount] = useState(2);
   const [splitRows, setSplitRows] = useState([]);
@@ -540,7 +561,7 @@ function PaymentModal({
 
           <div className="pos-section-title">Payment Methods</div>
           <div className="pos-pay-grid">
-            {paymentMethods.map((method) => {
+            {visiblePaymentMethods.map((method) => {
               const meta = paymentMeta(method);
               return (
                 <button
@@ -620,7 +641,7 @@ function PaymentModal({
                           value={row.method}
                           onChange={(e) => updateSplitRow(row.id, "method", e.target.value)}
                         >
-                          {paymentMethods.map((method) => (
+                          {visiblePaymentMethods.map((method) => (
                             <option key={method} value={method}>
                               {method}
                             </option>
@@ -791,13 +812,26 @@ export default function POSScreen({ token, module, session, onBack }) {
   const [calculatingDiscount, setCalculatingDiscount] = useState(false);
   const [discountResult, setDiscountResult] = useState(null);
   const [couponCode, setCouponCode] = useState("");
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(paymentMethods[0] || "Cash");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("Cash");
 
   const [loyaltyLookupLoading, setLoyaltyLookupLoading] = useState(false);
   const [loyaltyCustomer, setLoyaltyCustomer] = useState(null);
   const [loyaltyRedeemPoints, setLoyaltyRedeemPoints] = useState("");
 
   const driveThruTicket = module?.driveThruTicket || null;
+
+  useEffect(() => {
+    const currentMode = module?.modeKey || getOrderMode(module);
+
+    if (currentMode === "delivery") {
+      setSelectedPaymentMethod("Cash on Delivery");
+      return;
+    }
+
+    if (selectedPaymentMethod === "Cash on Delivery") {
+      setSelectedPaymentMethod("Cash");
+    }
+  }, [module?.modeKey]);
 
   const rawMode = module?.modeKey || getOrderMode(module);
   const orderMode =
@@ -2865,7 +2899,7 @@ export default function POSScreen({ token, module, session, onBack }) {
               <div>
                 <h3 style={{ margin: 0 }}>Checkout Panel</h3>
                 <div className="pos-small-muted">
-                  {cart.length} items in cart � {screenTitle}
+                  {cart.length} items in cart ï¿½ {screenTitle}
                 </div>
               </div>
 
@@ -3003,6 +3037,7 @@ export default function POSScreen({ token, module, session, onBack }) {
 
       {paymentModal ? (
         <PaymentModal
+          orderMode={orderMode}
           settings={settings}
           subtotal={subtotal}
           taxAmount={taxAmount}
@@ -3051,5 +3086,6 @@ export default function POSScreen({ token, module, session, onBack }) {
     </div>
   );
 }
+
 
 
