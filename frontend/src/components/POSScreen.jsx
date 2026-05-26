@@ -109,90 +109,90 @@ const demoCatalog = [
     name: "Burgers",
     colors: ["#f97316", "#ef4444"],
     products: [
-      ["Zinger Burger", "Crispy fillet with mayo and lettuce", 650, "\u{1F354}"],
-      ["Beef Smash Burger", "Double patty with cheese", 890, "\u{1F354}"],
-      ["Chicken Cheese Burger", "Grilled chicken and cheddar", 740, "\u{1F354}"],
-      ["Jalapeno Burger", "Spicy jalapeno and sauce", 780, "\u{1F336}\uFE0F"]
+      ["Zinger Burger", "Crispy fillet with mayo and lettuce", 650, "??"],
+      ["Beef Smash Burger", "Double patty with cheese", 890, "??"],
+      ["Chicken Cheese Burger", "Grilled chicken and cheddar", 740, "??"],
+      ["Jalapeno Burger", "Spicy jalapeno and sauce", 780, "???"]
     ]
   },
   {
     name: "Pizza",
     colors: ["#f59e0b", "#dc2626"],
     products: [
-      ["Chicken Fajita Pizza", "Loaded with spicy fajita chicken", 1390, "\u{1F355}"],
-      ["Pepperoni Pizza", "Classic pepperoni and mozzarella", 1550, "\u{1F355}"],
-      ["Crown Crust Pizza", "Premium crown crust special", 1790, "\u{1F355}"],
-      ["Cheese Lovers Pizza", "Extra cheese delight", 1490, "\u{1F355}"]
+      ["Chicken Fajita Pizza", "Loaded with spicy fajita chicken", 1390, "??"],
+      ["Pepperoni Pizza", "Classic pepperoni and mozzarella", 1550, "??"],
+      ["Crown Crust Pizza", "Premium crown crust special", 1790, "??"],
+      ["Cheese Lovers Pizza", "Extra cheese delight", 1490, "??"]
     ]
   },
   {
     name: "Broast",
     colors: ["#eab308", "#f97316"],
     products: [
-      ["Chicken Broast 2 Pc", "Crispy golden fried chicken", 560, "\u{1F357}"],
-      ["Chicken Broast 4 Pc", "Family size crispy chicken", 1090, "\u{1F357}"],
-      ["Chicken Strips", "Crunchy boneless strips", 680, "\u{1F357}"],
-      ["Spicy Wings", "Hot crispy wings", 590, "\u{1F357}"]
+      ["Chicken Broast 2 Pc", "Crispy golden fried chicken", 560, "??"],
+      ["Chicken Broast 4 Pc", "Family size crispy chicken", 1090, "??"],
+      ["Chicken Strips", "Crunchy boneless strips", 680, "??"],
+      ["Spicy Wings", "Hot crispy wings", 590, "??"]
     ]
   },
   {
     name: "BBQ",
     colors: ["#10b981", "#f97316"],
     products: [
-      ["Chicken Tikka", "Charcoal tikka piece", 490, "\u{1F356}"],
-      ["Malai Boti", "Creamy boneless bbq", 980, "\u{1F969}"],
-      ["Seekh Kabab", "Juicy seekh kabab", 620, "\u{1F356}"],
-      ["Chicken Bihari Boti", "Tender spicy bihari boti", 1040, "\u{1F969}"]
+      ["Chicken Tikka", "Charcoal tikka piece", 490, "??"],
+      ["Malai Boti", "Creamy boneless bbq", 980, "??"],
+      ["Seekh Kabab", "Juicy seekh kabab", 620, "??"],
+      ["Chicken Bihari Boti", "Tender spicy bihari boti", 1040, "??"]
     ]
   },
   {
     name: "Rice",
     colors: ["#16a34a", "#65a30d"],
     products: [
-      ["Chicken Biryani", "Traditional spicy biryani", 430, "\u{1F35B}"],
-      ["Mutton Pulao", "Fragrant pulao with mutton", 780, "\u{1F35A}"],
-      ["Chicken Fried Rice", "Chinese style fried rice", 620, "\u{1F35A}"],
-      ["Thai Rice Bowl", "Rice bowl with sauce", 710, "\u{1F35A}"]
+      ["Chicken Biryani", "Traditional spicy biryani", 430, "??"],
+      ["Mutton Pulao", "Fragrant pulao with mutton", 780, "??"],
+      ["Chicken Fried Rice", "Chinese style fried rice", 620, "??"],
+      ["Thai Rice Bowl", "Rice bowl with sauce", 710, "??"]
     ]
   },
   {
     name: "Karahi",
     colors: ["#dc2626", "#ea580c"],
     products: [
-      ["Chicken Karahi Half", "Fresh karahi half", 1390, "\u{1F958}"],
-      ["Chicken Karahi Full", "Family size karahi", 2490, "\u{1F958}"],
-      ["Mutton Karahi Half", "Premium mutton karahi", 2090, "\u{1F958}"],
-      ["White Karahi", "Creamy white karahi", 1590, "\u{1F958}"]
+      ["Chicken Karahi Half", "Fresh karahi half", 1390, "??"],
+      ["Chicken Karahi Full", "Family size karahi", 2490, "??"],
+      ["Mutton Karahi Half", "Premium mutton karahi", 2090, "??"],
+      ["White Karahi", "Creamy white karahi", 1590, "??"]
     ]
   },
   {
     name: "Drinks",
     colors: ["#06b6d4", "#2563eb"],
     products: [
-      ["Mint Margarita", "Refreshing mint cooler", 290, "\u{1F379}"],
+      ["Mint Margarita", "Refreshing mint cooler", 290, "??"],
       ["Cold Coffee", "Creamy iced coffee", 430, "?"],
-      ["Fresh Lime", "Sweet and salty lime", 240, "\u{1F379}"],
-      ["Soft Drink Can", "Chilled beverage can", 180, "\u{1F964}"]
+      ["Fresh Lime", "Sweet and salty lime", 240, "??"],
+      ["Soft Drink Can", "Chilled beverage can", 180, "??"]
     ]
   },
   {
     name: "Desserts",
     colors: ["#ec4899", "#8b5cf6"],
     products: [
-      ["Chocolate Brownie", "Warm brownie with chocolate", 390, "\u{1F36B}"],
-      ["Cheesecake Slice", "Creamy cheesecake", 520, "\u{1F370}"],
-      ["Lava Cake", "Molten chocolate center", 490, "\u{1F382}"],
-      ["Ice Cream Cup", "Vanilla ice cream cup", 260, "\u{1F368}"]
+      ["Chocolate Brownie", "Warm brownie with chocolate", 390, "??"],
+      ["Cheesecake Slice", "Creamy cheesecake", 520, "??"],
+      ["Lava Cake", "Molten chocolate center", 490, "??"],
+      ["Ice Cream Cup", "Vanilla ice cream cup", 260, "??"]
     ]
   },
   {
     name: "Combos",
     colors: ["#0f766e", "#0ea5e9"],
     products: [
-      ["Burger Combo", "Burger + fries + drink", 980, "\u{1F371}"],
-      ["Pizza Combo", "Mini pizza + drink", 1160, "\u{1F371}"],
-      ["Family Box", "Chicken, fries and drinks", 2890, "\u{1F371}"],
-      ["Kids Combo", "Mini burger + juice", 590, "\u{1F9C3}"]
+      ["Burger Combo", "Burger + fries + drink", 980, "??"],
+      ["Pizza Combo", "Mini pizza + drink", 1160, "??"],
+      ["Family Box", "Chicken, fries and drinks", 2890, "??"],
+      ["Kids Combo", "Mini burger + juice", 590, "??"]
     ]
   }
 ];
@@ -220,16 +220,16 @@ const demoItems = demoCatalog.flatMap((group, groupIndex) =>
 
 function categoryEmoji(category) {
   const key = String(category || "").toLowerCase();
-  if (key.includes("burger")) return "\u{1F354}";
-  if (key.includes("pizza")) return "\u{1F355}";
-  if (key.includes("bbq")) return "\u{1F356}";
-  if (key.includes("rice")) return "\u{1F35A}";
-  if (key.includes("drink")) return "\u{1F379}";
-  if (key.includes("dessert")) return "\u{1F370}";
-  if (key.includes("broast")) return "\u{1F357}";
-  if (key.includes("karahi")) return "\u{1F958}";
-  if (key.includes("combo")) return "\u{1F371}";
-  return "\u{1F37D}\uFE0F";
+  if (key.includes("burger")) return "??";
+  if (key.includes("pizza")) return "??";
+  if (key.includes("bbq")) return "??";
+  if (key.includes("rice")) return "??";
+  if (key.includes("drink")) return "??";
+  if (key.includes("dessert")) return "??";
+  if (key.includes("broast")) return "??";
+  if (key.includes("karahi")) return "??";
+  if (key.includes("combo")) return "??";
+  return "???";
 }
 
 function paletteFromName(text) {
@@ -277,25 +277,25 @@ function paymentMeta(method) {
   const key = String(method || "").toLowerCase();
 
   if (key.includes("cash")) {
-    return { icon: "\u{1F4B5}", title: "Cash", subtitle: "Cash Payment", bg: "linear-gradient(135deg,#22c55e,#16a34a)" };
+    return { icon: "??", title: "Cash", subtitle: "Cash Payment", bg: "linear-gradient(135deg,#22c55e,#16a34a)" };
   }
   if (key.includes("card")) {
-    return { icon: "\u{1F4B3}", title: "Card", subtitle: "POS / Visa / Master", bg: "linear-gradient(135deg,#3b82f6,#1d4ed8)" };
+    return { icon: "??", title: "Card", subtitle: "POS / Visa / Master", bg: "linear-gradient(135deg,#3b82f6,#1d4ed8)" };
   }
   if (key.includes("easy")) {
-    return { icon: "\u{1F4F1}", title: "Easypaisa", subtitle: "Wallet Payment", bg: "linear-gradient(135deg,#16a34a,#0f766e)" };
+    return { icon: "??", title: "Easypaisa", subtitle: "Wallet Payment", bg: "linear-gradient(135deg,#16a34a,#0f766e)" };
   }
   if (key.includes("jazz")) {
-    return { icon: "\u{1F4F2}", title: "JazzCash", subtitle: "Mobile Wallet", bg: "linear-gradient(135deg,#ef4444,#b91c1c)" };
+    return { icon: "??", title: "JazzCash", subtitle: "Mobile Wallet", bg: "linear-gradient(135deg,#ef4444,#b91c1c)" };
   }
   if (key.includes("bank")) {
-    return { icon: "\u{1F3E6}", title: "Bank", subtitle: "Bank Transfer", bg: "linear-gradient(135deg,#9333ea,#6d28d9)" };
+    return { icon: "??", title: "Bank", subtitle: "Bank Transfer", bg: "linear-gradient(135deg,#9333ea,#6d28d9)" };
   }
   if (key.includes("complimentary")) {
-    return { icon: "\u{1F381}", title: "Complimentary", subtitle: "Free / VIP", bg: "linear-gradient(135deg,#f59e0b,#ea580c)" };
+    return { icon: "??", title: "Complimentary", subtitle: "Free / VIP", bg: "linear-gradient(135deg,#f59e0b,#ea580c)" };
   }
 
-  return { icon: "\u{1F4B0}", title: method, subtitle: "Payment Method", bg: "linear-gradient(135deg,#475569,#0f172a)" };
+  return { icon: "??", title: method, subtitle: "Payment Method", bg: "linear-gradient(135deg,#475569,#0f172a)" };
 }
 
 function StaffSelect({ label, value, onChange, options, placeholder }) {
@@ -344,7 +344,7 @@ function ModalShell({ title, onClose, children, wide }) {
             </div>
           </div>
 
-          <button className="pos-ghost-btn pos-modal-close" onClick={onClose}>
+          <button className="pos-ghost-btn pos-modal-close" onClick={onClose} aria-label="Close">
             ×
           </button>
         </div>
@@ -358,10 +358,10 @@ function ModalShell({ title, onClose, children, wide }) {
 }
 
 function PhoneModal({ phone, setPhone, onClose, onDone }) {
-  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "0", "?"];
+  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "0", "⌫"];
 
   function press(key) {
-    if (key === "?") {
+    if (key === "⌫") {
       setPhone(phone.slice(0, -1));
       return;
     }
@@ -2513,7 +2513,7 @@ export default function POSScreen({ token, module, session, onBack }) {
       <div className="pro-pos-layout">
         <aside className="pro-panel pos-left">
           <button className="pos-back-btn" onClick={onBack}>
-            ← Back
+            ? Back
           </button>
 
           <div className="pos-title-card">
@@ -2527,14 +2527,14 @@ export default function POSScreen({ token, module, session, onBack }) {
           </div>
 
           <div className="pos-chip-wrap">
-            <div className="pos-chip">{cart.length} Items</div>
-            <div className="pos-chip">{visibleItems.length} Visible</div>
-            <div className="pos-chip">{menuItems.length} Menu Items</div>
+            <div className="pos-chip">?? {cart.length} Items</div>
+            <div className="pos-chip">?? {visibleItems.length} Visible</div>
+            <div className="pos-chip">?? {menuItems.length} Menu Items</div>
           </div>
 
           {driveThruTicket ? (
             <div className="pos-title-card">
-              <div style={{ fontWeight: 950 }}>{"\u{1F3F7}\uFE0F"} {driveThruTicket.tokenNo}</div>
+              <div style={{ fontWeight: 950 }}>?? {driveThruTicket.tokenNo}</div>
               <div className="pos-small-muted" style={{ marginTop: 8 }}>
                 {driveThruTicket.vehicleNo || "No vehicle no"}  {driveThruTicket.vehicleColor || "No color"}  {driveThruTicket.vehicleType || "Vehicle"}
               </div>
@@ -2608,7 +2608,7 @@ export default function POSScreen({ token, module, session, onBack }) {
 
           {loyaltyCustomer ? (
             <div className="pos-title-card">
-              <div style={{ fontWeight: 950 }}>{"\u{1F381}"} Loyalty Customer</div>
+              <div style={{ fontWeight: 950 }}>?? Loyalty Customer</div>
               <div className="pos-small-muted" style={{ marginTop: 8 }}>
                 {loyaltyCustomer.name}  {loyaltyCustomer.loyaltyPoints || 0} points
               </div>
@@ -2644,7 +2644,7 @@ export default function POSScreen({ token, module, session, onBack }) {
           />
 
           <div className="pos-title-card">
-            <div style={{ fontWeight: 950 }}>{"\u{1F9FE}"} Tax & Charges</div>
+            <div style={{ fontWeight: 950 }}>?? Tax & Charges</div>
             <div className="pos-small-muted" style={{ marginTop: 8 }}>
               {settings.taxName || "GST"} {settings.taxPercent || 0}%  {settings.serviceChargeName || "Service"} {settings.serviceChargePercent || 0}%
             </div>
@@ -2695,7 +2695,7 @@ export default function POSScreen({ token, module, session, onBack }) {
             {visibleItems.length === 0 ? (
               <div className="pos-empty-cart">
                 <div>
-                  <div style={{ fontSize: 42 }}>{"\u{1F6D2}"}</div>
+                  <div style={{ fontSize: 56 }}>???</div>
                   <h3>No items found</h3>
                   <p>Try another category or search keyword.</p>
                 </div>
@@ -2776,7 +2776,7 @@ export default function POSScreen({ token, module, session, onBack }) {
             {cart.length === 0 ? (
               <div className="pos-empty-cart">
                 <div>
-                  <div style={{ fontSize: 52 }}>•</div>
+                  <div style={{ fontSize: 52 }}>??</div>
                   <h3>Cart is empty</h3>
                   <p>Select menu items to start order.</p>
                 </div>
@@ -2920,24 +2920,3 @@ export default function POSScreen({ token, module, session, onBack }) {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
