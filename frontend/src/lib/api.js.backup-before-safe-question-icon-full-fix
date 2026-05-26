@@ -34,4 +34,3 @@ export function formatTime(dateString) {
   return new Date(dateString).toLocaleTimeString();
 }
 
-

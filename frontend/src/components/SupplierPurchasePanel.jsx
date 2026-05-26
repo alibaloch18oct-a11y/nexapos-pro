@@ -836,3 +836,4 @@ export default function SupplierPurchasePanel({ token, session, onBack }) {
   );
 }
 
+

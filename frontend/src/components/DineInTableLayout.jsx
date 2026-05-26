@@ -970,3 +970,4 @@ export default function DineInTableLayout({ token, session, onBack, onOpenOrder 
     </div>
   );
 }
+

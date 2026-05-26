@@ -215,7 +215,7 @@ function EditOrderModal({ token, order, menuItems, onClose, onSaved }) {
             <p>Update items, quantities, and send changes back to kitchen.</p>
           </div>
 
-          <button className="orders-icon-btn" onClick={onClose}>?</button>
+          <button className="orders-icon-btn" onClick={onClose}>×</button>
         </div>
 
         <div className="orders-edit-grid">
@@ -409,7 +409,7 @@ function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel, onPay })
             </span>
           </div>
 
-          <button className="orders-icon-btn" onClick={onClose}>?</button>
+          <button className="orders-icon-btn" onClick={onClose}>×</button>
         </div>
 
         <div className="orders-details-grid">
@@ -1397,6 +1397,8 @@ export default function OrdersPanel({ token, onBack }) {
     </div>
   );
 }
+
+
 
 
 
