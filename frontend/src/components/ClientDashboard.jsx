@@ -207,13 +207,14 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
       <style>
         {`
           .nexa-epos-dashboard {
-            min-height: calc(100vh - 72px);
+            height: calc(100vh - 94px);
+            min-height: 0;
             position: relative;
-            overflow-y: auto;
-            padding: 18px 24px 16px;
+            overflow: hidden;
+            padding: 10px 18px 10px;
             display: grid;
-            grid-template-rows: auto auto 1fr auto;
-            gap: 18px;
+            grid-template-rows: 92px 58px minmax(0, 1fr) 96px;
+            gap: 9px;
             background:
               radial-gradient(circle at 12% 22%, rgba(88,28,135,.95), transparent 30%),
               radial-gradient(circle at 86% 18%, rgba(236,72,153,.74), transparent 34%),
@@ -236,24 +237,25 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
             position: relative;
             z-index: 2;
             display: grid;
-            grid-template-columns: 335px minmax(360px, 1fr) 430px;
-            gap: 18px;
+            grid-template-columns: 285px minmax(360px, 1fr) 350px;
+            gap: 10px;
             align-items: stretch;
+            min-height: 0;
           }
 
           .epos-glass {
-            border-radius: 30px;
+            border-radius: 22px;
             background: rgba(15,23,42,.25);
             border: 1px solid rgba(255,255,255,.13);
             backdrop-filter: blur(18px);
-            box-shadow: 0 24px 58px rgba(0,0,0,.20);
+            box-shadow: 0 18px 42px rgba(0,0,0,.18);
           }
 
           .sync-card {
             display: grid;
-            grid-template-columns: 84px 1fr;
+            grid-template-columns: 70px 1fr;
             overflow: hidden;
-            min-height: 112px;
+            min-height: 0;
           }
 
           .sync-left {
@@ -263,32 +265,35 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
             place-items: center;
             text-align: center;
             font-weight: 950;
-            font-size: 13px;
+            font-size: 11px;
           }
 
           .sync-right {
-            padding: 18px 20px;
+            padding: 12px 14px;
+            display: grid;
+            align-content: center;
           }
 
           .sync-time {
-            font-size: 34px;
+            font-size: 28px;
             font-weight: 1000;
             line-height: 1;
             text-shadow: 0 5px 12px rgba(0,0,0,.38);
           }
 
           .sync-date {
-            margin-top: 10px;
-            font-size: 20px;
+            margin-top: 7px;
+            font-size: 16px;
             font-weight: 850;
             opacity: .96;
           }
 
           .welcome-panel {
-            padding: 14px 18px;
+            padding: 10px 14px;
             text-align: center;
             display: grid;
             align-content: center;
+            min-height: 0;
           }
 
           .welcome-kicker {
@@ -296,75 +301,83 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
             align-items: center;
             gap: 7px;
             justify-self: center;
-            padding: 7px 12px;
+            padding: 5px 10px;
             border-radius: 999px;
             background: rgba(255,255,255,.13);
             border: 1px solid rgba(255,255,255,.12);
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 900;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
           }
 
           .welcome-title {
             margin: 0;
-            font-size: 40px;
+            font-size: 30px;
             font-weight: 1000;
             letter-spacing: -.055em;
-            line-height: 1;
+            line-height: .96;
             text-shadow: 0 7px 18px rgba(0,0,0,.32);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
 
           .stats-strip {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 9px;
-            margin-top: 14px;
+            gap: 6px;
+            margin-top: 9px;
           }
 
           .stat-chip {
-            border-radius: 18px;
-            padding: 10px 11px;
+            border-radius: 14px;
+            padding: 7px 8px;
             background: rgba(255,255,255,.105);
             border: 1px solid rgba(255,255,255,.105);
             text-align: left;
             display: grid;
             grid-template-columns: auto 1fr;
-            gap: 8px;
+            gap: 6px;
             align-items: center;
+            min-width: 0;
           }
 
           .stat-label {
             margin: 0;
             color: rgba(255,255,255,.70);
-            font-size: 11px;
+            font-size: 9.5px;
             font-weight: 800;
+            white-space: nowrap;
           }
 
           .stat-value {
-            margin: 3px 0 0;
+            margin: 2px 0 0;
             font-weight: 1000;
-            font-size: 16px;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
 
           .user-panel {
             display: grid;
-            grid-template-columns: 60px 1fr 54px;
+            grid-template-columns: 46px 1fr 46px;
             align-items: center;
-            gap: 12px;
-            padding: 15px;
-            min-height: 112px;
+            gap: 9px;
+            padding: 11px;
+            min-height: 0;
           }
 
           .user-avatar,
           .notify-btn {
-            width: 52px;
-            height: 52px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
             border: 0;
             display: grid;
             place-items: center;
             background: rgba(255,255,255,.96);
-            font-size: 28px;
+            font-size: 23px;
             position: relative;
           }
 
@@ -374,35 +387,39 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
 
           .notify-dot {
             position: absolute;
-            top: -4px;
-            right: -4px;
-            width: 24px;
-            height: 24px;
+            top: -3px;
+            right: -3px;
+            width: 20px;
+            height: 20px;
             border-radius: 999px;
             background: #ef4444;
             color: white;
             display: grid;
             place-items: center;
-            font-size: 12px;
+            font-size: 10px;
             font-weight: 950;
           }
 
           .user-name {
             font-weight: 1000;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             text-shadow: 0 4px 10px rgba(0,0,0,.22);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
 
           .branch-select {
             width: 100%;
-            height: 44px;
-            border-radius: 15px;
+            height: 36px;
+            border-radius: 13px;
             border: 1px solid rgba(255,255,255,.15);
             background: rgba(255,255,255,.16);
             color: white;
-            padding: 0 13px;
+            padding: 0 10px;
             outline: none;
             font-weight: 850;
+            font-size: 12px;
           }
 
           .branch-select option {
@@ -414,50 +431,59 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
             z-index: 2;
             display: grid;
             grid-template-columns: 1fr auto;
-            gap: 14px;
+            gap: 10px;
             align-items: center;
-            padding: 14px 16px;
-            border-radius: 26px;
+            padding: 9px 12px;
+            border-radius: 20px;
             background:
               radial-gradient(circle at top left, rgba(250,204,21,.16), transparent 32%),
               rgba(15,23,42,.25);
             border: 1px solid rgba(255,255,255,.13);
             backdrop-filter: blur(18px);
-            box-shadow: 0 24px 58px rgba(0,0,0,.16);
+            box-shadow: 0 16px 38px rgba(0,0,0,.14);
+            min-height: 0;
+            overflow: hidden;
           }
 
           .demo-control-panel h2 {
             margin: 0;
-            font-size: 20px;
+            font-size: 16px;
             font-weight: 1000;
           }
 
           .demo-control-panel p {
-            margin: 5px 0 0;
+            margin: 3px 0 0;
             color: rgba(255,255,255,.74);
-            font-size: 13px;
+            font-size: 11.5px;
             font-weight: 750;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
 
           .demo-status {
-            margin-top: 7px;
+            margin-top: 3px;
             color: #fde68a;
-            font-size: 12px;
+            font-size: 10.5px;
             font-weight: 850;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
 
           .demo-seed-btn {
-            min-height: 48px;
+            min-height: 39px;
             border: 0;
-            border-radius: 16px;
+            border-radius: 14px;
             background: linear-gradient(135deg,#facc15,#f97316);
             color: #111827;
             font-weight: 1000;
             cursor: pointer;
-            padding: 0 17px;
-            box-shadow: 0 15px 34px rgba(249,115,22,.28);
+            padding: 0 14px;
+            box-shadow: 0 12px 26px rgba(249,115,22,.25);
             transition: .18s ease;
             white-space: nowrap;
+            font-size: 12px;
           }
 
           .demo-seed-btn:hover {
@@ -477,13 +503,14 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
             display: grid;
             place-items: center;
             min-height: 0;
+            overflow: hidden;
           }
 
           .main-mode-grid {
-            width: min(1180px, 100%);
+            width: min(840px, 100%);
             display: grid;
-            grid-template-columns: repeat(3, minmax(210px, 1fr));
-            gap: 30px 46px;
+            grid-template-columns: repeat(3, minmax(160px, 1fr));
+            gap: 13px 34px;
             justify-items: center;
             align-items: center;
           }
@@ -492,23 +519,24 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
             display: grid;
             justify-items: center;
             position: relative;
+            min-width: 0;
           }
 
           .mode-tile {
-            width: 246px;
-            height: 184px;
+            width: 178px;
+            height: 118px;
             border: 0;
-            border-radius: 30px;
+            border-radius: 23px;
             cursor: pointer;
             position: relative;
             overflow: hidden;
             color: white;
-            box-shadow: 0 24px 54px var(--tile-shadow);
+            box-shadow: 0 18px 38px var(--tile-shadow);
             transition: .22s ease;
           }
 
           .mode-tile:hover {
-            transform: translateY(-9px) scale(1.022);
+            transform: translateY(-7px) scale(1.022);
             filter: brightness(1.06);
           }
 
@@ -524,17 +552,17 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
 
           .mode-number {
             position: absolute;
-            top: 12px;
-            left: 13px;
-            width: 34px;
-            height: 34px;
-            border-radius: 12px;
+            top: 9px;
+            left: 10px;
+            width: 28px;
+            height: 28px;
+            border-radius: 10px;
             background: rgba(255,255,255,.92);
             color: #4c1d95;
             display: grid;
             place-items: center;
             font-weight: 1000;
-            font-size: 16px;
+            font-size: 13px;
             z-index: 4;
           }
 
@@ -542,7 +570,7 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
             height: 100%;
             display: grid;
             place-items: center;
-            font-size: 90px;
+            font-size: 63px;
             position: relative;
             z-index: 2;
           }
@@ -552,18 +580,20 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
           }
 
           .mode-name {
-            margin-top: 11px;
-            font-size: 24px;
+            margin-top: 7px;
+            font-size: 18px;
             font-weight: 1000;
             text-shadow: 0 5px 12px rgba(0,0,0,.55);
+            line-height: 1;
           }
 
           .mode-subtitle {
-            margin-top: 3px;
-            font-size: 12px;
+            margin-top: 2px;
+            font-size: 10.5px;
             font-weight: 850;
             color: rgba(255,255,255,.78);
             text-shadow: 0 4px 8px rgba(0,0,0,.35);
+            line-height: 1;
           }
 
           .walkAnim { animation: walkAnim 1.05s ease-in-out infinite; }
@@ -612,66 +642,241 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
           .bottom-dock-zone {
             position: relative;
             z-index: 2;
-            border-radius: 30px;
+            border-radius: 22px;
             background: rgba(15,23,42,.18);
             border: 1px solid rgba(255,255,255,.08);
-            padding: 11px 12px 8px;
+            padding: 7px 10px 6px;
             backdrop-filter: blur(12px);
+            overflow: hidden;
+            min-height: 0;
           }
 
           .dock-scroll {
+            height: 100%;
             display: flex;
             justify-content: center;
-            gap: 12px;
+            align-items: center;
+            gap: 8px;
             flex-wrap: wrap;
+            overflow: hidden;
           }
 
           .dock-item {
-            width: 86px;
+            width: 68px;
             border: 0;
             background: transparent;
             color: white;
             display: grid;
             justify-items: center;
-            gap: 7px;
+            gap: 4px;
             cursor: pointer;
             transition: .18s ease;
+            padding: 0;
           }
 
           .dock-item:hover {
-            transform: translateY(-7px) scale(1.035);
+            transform: translateY(-5px) scale(1.035);
           }
 
           .dock-icon {
-            width: 64px;
-            height: 64px;
-            border-radius: 18px;
+            width: 45px;
+            height: 45px;
+            border-radius: 14px;
             display: grid;
             place-items: center;
-            font-size: 31px;
-            box-shadow: 0 18px 30px rgba(0,0,0,.18);
+            font-size: 24px;
+            box-shadow: 0 13px 22px rgba(0,0,0,.16);
             border: 1px solid rgba(255,255,255,.22);
           }
 
           .dock-label {
-            font-size: 13px;
+            font-size: 10.5px;
             font-weight: 950;
-            line-height: 1.1;
+            line-height: 1.05;
             text-shadow: 0 4px 10px rgba(0,0,0,.55);
+            white-space: nowrap;
+          }
+
+          @media (max-height: 760px) {
+            .nexa-epos-dashboard {
+              height: calc(100vh - 88px);
+              grid-template-rows: 84px 52px minmax(0, 1fr) 86px;
+              gap: 7px;
+              padding: 8px 14px 8px;
+            }
+
+            .epos-top {
+              grid-template-columns: 250px minmax(330px, 1fr) 320px;
+              gap: 8px;
+            }
+
+            .sync-card {
+              grid-template-columns: 62px 1fr;
+            }
+
+            .sync-time {
+              font-size: 24px;
+            }
+
+            .sync-date {
+              font-size: 13px;
+            }
+
+            .welcome-title {
+              font-size: 25px;
+            }
+
+            .stats-strip {
+              margin-top: 7px;
+            }
+
+            .stat-chip {
+              padding: 6px 7px;
+            }
+
+            .stat-label {
+              font-size: 9px;
+            }
+
+            .stat-value {
+              font-size: 12px;
+            }
+
+            .demo-control-panel h2 {
+              font-size: 14px;
+            }
+
+            .demo-control-panel p {
+              font-size: 10.5px;
+            }
+
+            .demo-seed-btn {
+              min-height: 34px;
+              font-size: 11px;
+            }
+
+            .main-mode-grid {
+              width: min(760px, 100%);
+              gap: 10px 28px;
+              grid-template-columns: repeat(3, minmax(145px, 1fr));
+            }
+
+            .mode-tile {
+              width: 158px;
+              height: 102px;
+              border-radius: 20px;
+            }
+
+            .mode-icon {
+              font-size: 54px;
+            }
+
+            .mode-name {
+              font-size: 16px;
+              margin-top: 6px;
+            }
+
+            .mode-subtitle {
+              font-size: 10px;
+            }
+
+            .dock-item {
+              width: 62px;
+            }
+
+            .dock-icon {
+              width: 39px;
+              height: 39px;
+              border-radius: 12px;
+              font-size: 21px;
+            }
+
+            .dock-label {
+              font-size: 9.5px;
+            }
           }
 
           @media (max-width: 1280px) {
             .epos-top {
-              grid-template-columns: 1fr;
+              grid-template-columns: 230px minmax(320px, 1fr) 280px;
             }
 
             .welcome-title {
-              font-size: 34px;
+              font-size: 24px;
             }
 
             .main-mode-grid {
-              grid-template-columns: repeat(2, minmax(210px, 1fr));
-              gap: 30px;
+              width: min(740px, 100%);
+              gap: 10px 22px;
+            }
+
+            .mode-tile {
+              width: 156px;
+              height: 104px;
+            }
+
+            .mode-icon {
+              font-size: 54px;
+            }
+
+            .dock-item {
+              width: 60px;
+            }
+
+            .dock-icon {
+              width: 38px;
+              height: 38px;
+              font-size: 20px;
+            }
+
+            .dock-label {
+              font-size: 9px;
+            }
+          }
+
+          @media (max-width: 980px) {
+            .nexa-epos-dashboard {
+              height: auto;
+              min-height: calc(100vh - 94px);
+              overflow-y: auto;
+              grid-template-rows: auto auto auto auto;
+            }
+
+            .epos-top {
+              grid-template-columns: 1fr;
+            }
+
+            .demo-control-panel {
+              grid-template-columns: 1fr;
+            }
+
+            .demo-control-panel p,
+            .demo-status,
+            .welcome-title {
+              white-space: normal;
+            }
+
+            .main-mode-grid {
+              grid-template-columns: repeat(2, minmax(160px, 1fr));
+              width: 100%;
+              gap: 22px 18px;
+            }
+
+            .mode-tile {
+              width: min(210px, 100%);
+              height: 132px;
+            }
+
+            .mode-icon {
+              font-size: 68px;
+            }
+
+            .bottom-dock-zone {
+              overflow: visible;
+            }
+
+            .dock-scroll {
+              overflow: visible;
             }
           }
 
@@ -680,9 +885,8 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
               padding: 12px;
             }
 
-            .stats-strip,
-            .demo-control-panel {
-              grid-template-columns: 1fr;
+            .stats-strip {
+              grid-template-columns: 1fr 1fr;
             }
 
             .main-mode-grid {
@@ -691,10 +895,17 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
 
             .mode-tile {
               width: min(286px, 100%);
+              height: 150px;
             }
 
             .dock-item {
               width: 76px;
+            }
+
+            .dock-icon {
+              width: 52px;
+              height: 52px;
+              font-size: 27px;
             }
           }
         `}
@@ -827,6 +1038,3 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
     </div>
   );
 }
-
-
-
