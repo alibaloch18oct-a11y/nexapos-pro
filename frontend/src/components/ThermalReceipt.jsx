@@ -610,7 +610,7 @@ export default function ThermalReceipt({ order, settings, onClose }) {
                   <strong>Split Payments</strong>
                   {splits.map((split, index) => (
                     <div className="receipt-split-row" key={split.id || index}>
-                      <span>{split.label || `Guest ${index + 1}`} Â· {split.method}</span>
+                      <span>{split.label || `Guest ${index + 1}`}  -  {split.method}</span>
                       <strong>{money(receiptSettings, split.amount)}</strong>
                     </div>
                   ))}
@@ -648,6 +648,7 @@ export default function ThermalReceipt({ order, settings, onClose }) {
     </div>
   );
 }
+
 
 
 

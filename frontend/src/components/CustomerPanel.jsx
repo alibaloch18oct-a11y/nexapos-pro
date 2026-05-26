@@ -149,7 +149,7 @@ function OrderHistory({ orders }) {
           <div>
             <strong>{order.orderNo}</strong>
             <p className="nexa-small">
-              {order.mode} Â· {order.paymentStatus} Â· {order.createdAt ? new Date(order.createdAt).toLocaleString() : ""}
+              {order.mode}  -  {order.paymentStatus}  -  {order.createdAt ? new Date(order.createdAt).toLocaleString() : ""}
             </p>
           </div>
           <strong style={{ color: "#86efac" }}>{money(order.total)}</strong>
@@ -446,7 +446,7 @@ export default function CustomerPanel({ token, session, onBack }) {
                 <div>
                   <h2 style={{ margin: 0 }}>{selectedDetails.customer.name}</h2>
                   <p className="nexa-section-sub">
-                    {selectedDetails.customer.phone} Â· {selectedDetails.customer.loyaltyPoints || 0} points
+                    {selectedDetails.customer.phone}  -  {selectedDetails.customer.loyaltyPoints || 0} points
                   </p>
                 </div>
                 <button className="nexa-logout" onClick={() => setSelectedDetails(null)}>
@@ -591,6 +591,7 @@ export default function CustomerPanel({ token, session, onBack }) {
     </div>
   );
 }
+
 
 
 

@@ -305,7 +305,7 @@ export default function InventoryPanel({ token, session, onBack }) {
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                       <div>
                         <h3 style={{ margin: 0 }}>{item.name}</h3>
-                        <p className="nexa-small">{item.category} Â· {item.sku}</p>
+                        <p className="nexa-small">{item.category}  -  {item.sku}</p>
                       </div>
 
                       {low ? (
@@ -477,7 +477,7 @@ export default function InventoryPanel({ token, session, onBack }) {
                   </div>
 
                   <div className="nexa-small">
-                    {movement.previousStock} â†’ {movement.newStock}
+                    {movement.previousStock} -> {movement.newStock}
                   </div>
 
                   <div className="nexa-small">
@@ -564,6 +564,7 @@ export default function InventoryPanel({ token, session, onBack }) {
     </div>
   );
 }
+
 
 
 

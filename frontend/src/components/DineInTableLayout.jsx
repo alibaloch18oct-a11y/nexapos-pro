@@ -22,7 +22,7 @@ function statusTone(status) {
   const map = {
     available: {
       label: "Available",
-      icon: "âœ…",
+      icon: "…",
       color: "#86efac",
       bg: "rgba(34,197,94,.14)",
       border: "rgba(34,197,94,.35)",
@@ -30,7 +30,7 @@ function statusTone(status) {
     },
     occupied: {
       label: "Occupied",
-      icon: "ðŸ½ï¸",
+      icon: "",
       color: "#fca5a5",
       bg: "rgba(239,68,68,.14)",
       border: "rgba(239,68,68,.35)",
@@ -38,7 +38,7 @@ function statusTone(status) {
     },
     reserved: {
       label: "Reserved",
-      icon: "ðŸ“Œ",
+      icon: "",
       color: "#fde68a",
       bg: "rgba(250,204,21,.14)",
       border: "rgba(250,204,21,.35)",
@@ -46,7 +46,7 @@ function statusTone(status) {
     },
     cleaning: {
       label: "Cleaning",
-      icon: "ðŸ§¹",
+      icon: "",
       color: "#93c5fd",
       bg: "rgba(59,130,246,.14)",
       border: "rgba(59,130,246,.35)",
@@ -54,7 +54,7 @@ function statusTone(status) {
     },
     merged: {
       label: "Merged",
-      icon: "ðŸ”—",
+      icon: "",
       color: "#c4b5fd",
       bg: "rgba(168,85,247,.14)",
       border: "rgba(168,85,247,.35)",
@@ -119,7 +119,7 @@ function TableFormModal({ table, onClose, onSave }) {
             <p>Change table name, area, chairs, shape and status.</p>
           </div>
 
-          <button className="floor-icon-btn" onClick={onClose}>âœ•</button>
+          <button className="floor-icon-btn" onClick={onClose}>x</button>
         </div>
 
         <div className="floor-form-grid">
@@ -217,7 +217,7 @@ function TableCard({ table, allTables, onOpenOrder, onEdit, onStatusChange }) {
   return (
     <div className={`floor-table-card ${table.shape} ${isMergedChild ? "locked" : ""}`} style={{ borderColor: tone.border, boxShadow: `0 20px 55px ${tone.glow}` }}>
       <div className="floor-status-pill" style={{ color: tone.color, background: tone.bg, borderColor: tone.border }}>
-        {tone.icon} {isMergedChild ? "Merged Child" : tone.label}
+        {isMergedChild ? "Merged Child" : tone.label}
       </div>
 
       <div className="floor-table-stage">
@@ -256,7 +256,7 @@ function TableCard({ table, allTables, onOpenOrder, onEdit, onStatusChange }) {
 
       {table.reservationName || table.reservationPhone || table.reservationTime ? (
         <div className="floor-info-box yellow">
-          <strong>ðŸ“Œ {table.reservationName || "Reserved Guest"}</strong>
+          <strong> {table.reservationName || "Reserved Guest"}</strong>
           {table.reservationPhone ? <span>{table.reservationPhone}</span> : null}
           {table.reservationTime ? <span>{table.reservationTime}</span> : null}
           {table.reservationNote ? <span>{table.reservationNote}</span> : null}
@@ -889,7 +889,7 @@ export default function DineInTableLayout({ token, session, onBack, onOpenOrder 
 
       <div className="floor-head">
         <div>
-          <button className="floor-back" onClick={onBack}>â† Back</button>
+          <button className="floor-back" onClick={onBack}>Back</button>
           <h1 className="floor-title">Dine-In Floor Plan</h1>
           <p className="floor-sub">
             Premium editable table layout for {session?.tenant?.restaurantName || "restaurant"}.
@@ -970,5 +970,7 @@ export default function DineInTableLayout({ token, session, onBack, onOpenOrder 
     </div>
   );
 }
+
+
 
 

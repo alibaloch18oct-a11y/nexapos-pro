@@ -232,3 +232,4 @@ export default function StockMovementPanel({ token, session, onBack }) {
 
 
 
+

@@ -65,7 +65,7 @@ export default function ReceiptModal({ table, mode = "settle", onClose, onPaid }
               {mode === "print" ? "Print Bill Preview" : "Settle Table Payment"}
             </h2>
             <p className="nexa-section-sub">
-              Table {table?.name} Â· Order {table?.orderNo || "#NEW"} Â· Staff {table?.staff || "Staff"}
+              Table {table?.name}  -  Order {table?.orderNo || "#NEW"}  -  Staff {table?.staff || "Staff"}
             </p>
           </div>
 
@@ -217,6 +217,7 @@ export default function ReceiptModal({ table, mode = "settle", onClose, onPaid }
     </div>
   );
 }
+
 
 
 

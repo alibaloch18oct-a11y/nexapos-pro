@@ -163,7 +163,7 @@ function PurchaseCard({ invoice, onPayment }) {
           {(invoice.items || []).slice(0, 4).map((item) => (
             <div key={item.id} className="nexa-pill" style={{ justifyContent: "space-between" }}>
               <span>{item.inventoryItemName}</span>
-              <span>{item.qty} Ã— {money(item.unitCost)}</span>
+              <span>{item.qty} x {money(item.unitCost)}</span>
             </div>
           ))}
         </div>
@@ -529,7 +529,7 @@ export default function SupplierPurchasePanel({ token, session, onBack }) {
                   <option value="">Select supplier</option>
                   {suppliers.filter((supplier) => supplier.isActive !== false).map((supplier) => (
                     <option key={supplier.id} value={supplier.id}>
-                      {supplier.name} Â· Balance {money(supplier.balance)}
+                      {supplier.name}  -  Balance {money(supplier.balance)}
                     </option>
                   ))}
                 </select>
@@ -624,7 +624,7 @@ export default function SupplierPurchasePanel({ token, session, onBack }) {
                             <option value="">Select inventory</option>
                             {inventory.map((item) => (
                               <option key={item.id} value={item.id}>
-                                {getInventoryName(item)} Â· Stock {getStockValue(item)}
+                                {getInventoryName(item)}  -  Stock {getStockValue(item)}
                               </option>
                             ))}
                           </select>
@@ -677,7 +677,7 @@ export default function SupplierPurchasePanel({ token, session, onBack }) {
 
                       {inv ? (
                         <div style={{ gridColumn: "1 / -1", color: "#94a3b8", fontSize: 12 }}>
-                          Current stock: {getStockValue(inv)} {inv.unit || inv.stockUnit || "pcs"} â†’ After purchase:{" "}
+                          Current stock: {getStockValue(inv)} {inv.unit || inv.stockUnit || "pcs"} -> After purchase:{" "}
                           {Number(getStockValue(inv)) + Number(line.qty || 0)} {line.unit || inv.unit || inv.stockUnit || "pcs"}
                         </div>
                       ) : null}
@@ -835,6 +835,7 @@ export default function SupplierPurchasePanel({ token, session, onBack }) {
     </div>
   );
 }
+
 
 
 

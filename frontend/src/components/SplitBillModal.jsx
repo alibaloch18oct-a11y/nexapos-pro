@@ -178,7 +178,7 @@ export default function SplitBillModal({ table, onClose }) {
               Split Bill Order {table.orderNo || "#694"}
             </h2>
             <p style={{ margin: "4px 0 0", color: "#94a3b8" }}>
-              Table {table.name} Â· Staff {table.staff || "Admin"} Â· Guests {table.guests || 2}
+              Table {table.name}  -  Staff {table.staff || "Admin"}  -  Guests {table.guests || 2}
             </p>
           </div>
 
@@ -359,7 +359,7 @@ export default function SplitBillModal({ table, onClose }) {
                   <div>
                     <h3 style={{ margin: 0 }}>{item.name}</h3>
                     <p style={{ margin: "6px 0 0", color: "#94a3b8" }}>
-                      Original Qty: {item.qty} Â· Unit Price Rs {item.price}
+                      Original Qty: {item.qty}  -  Unit Price Rs {item.price}
                     </p>
                   </div>
 
@@ -507,6 +507,7 @@ export default function SplitBillModal({ table, onClose }) {
     </div>
   );
 }
+
 
 
 

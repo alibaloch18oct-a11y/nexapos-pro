@@ -226,7 +226,7 @@ export default function MenuInventoryMappingPanel({ token, session, onBack }) {
   }
 
   async function deleteMapping(mapping) {
-    if (!confirm(`Delete mapping "${mapping.menuItemName} â†’ ${mapping.inventoryItemName}"?`)) return;
+    if (!confirm(`Delete mapping "${mapping.menuItemName} -> ${mapping.inventoryItemName}"?`)) return;
 
     try {
       await api(token).delete(`/api/menu-inventory-mappings/${mapping.id}`);
@@ -300,7 +300,7 @@ export default function MenuInventoryMappingPanel({ token, session, onBack }) {
                     style={{ minHeight: 110 }}
                   >
                     <strong>{suggestion.menuItemName}</strong>
-                    <p className="nexa-small">â†’ {suggestion.inventoryItemName}</p>
+                    <p className="nexa-small">-> {suggestion.inventoryItemName}</p>
                     <div className="nexa-pill">Confidence: {suggestion.confidence}</div>
                   </button>
                 ))}
@@ -374,7 +374,7 @@ export default function MenuInventoryMappingPanel({ token, session, onBack }) {
                   <option value="">Select menu item</option>
                   {menuItems.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.name} Â· {item.category || "Menu"}
+                      {item.name}  -  {item.category || "Menu"}
                     </option>
                   ))}
                 </select>
@@ -400,7 +400,7 @@ export default function MenuInventoryMappingPanel({ token, session, onBack }) {
                   <option value="">Select inventory item</option>
                   {inventory.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {getInventoryName(item)} Â· Stock {getStockValue(item)}
+                      {getInventoryName(item)}  -  Stock {getStockValue(item)}
                     </option>
                   ))}
                 </select>
@@ -494,6 +494,7 @@ export default function MenuInventoryMappingPanel({ token, session, onBack }) {
     </div>
   );
 }
+
 
 
 

@@ -514,7 +514,7 @@ export default function SubscriptionPanel({ token, onBack }) {
                   >
                     <strong>{payment.restaurantName}</strong>
                     <p className="nexa-small">
-                      Rs {payment.amount} Â· {payment.months} months Â· {payment.paymentMethod}
+                      Rs {payment.amount}  -  {payment.months} months  -  {payment.paymentMethod}
                     </p>
                     <p className="nexa-small">Expiry: {payment.expiryDate}</p>
                   </div>
@@ -527,6 +527,7 @@ export default function SubscriptionPanel({ token, onBack }) {
     </div>
   );
 }
+
 
 
 

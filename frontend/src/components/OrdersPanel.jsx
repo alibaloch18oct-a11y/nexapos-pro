@@ -231,7 +231,7 @@ function EditOrderModal({ token, order, menuItems, onClose, onSaved }) {
                     <div>
                       <strong>{item.name}</strong>
                       <p>{item.category || item.subtitle || "Menu Item"}</p>
-                      <span>{money(order, item.price)} � {item.qty}</span>
+                      <span>{money(order, item.price)} x {item.qty}</span>
                     </div>
 
                     <div className="orders-edit-actions">
@@ -403,7 +403,7 @@ function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel, onPay })
         <div className="orders-modal-head">
           <div>
             <h2>{order.orderNo || "Order Details"}</h2>
-            <p>{normalizeMode(order.mode)} � {formatDate(order.createdAt || order.date)}</p>
+            <p>{normalizeMode(order.mode)} x {formatDate(order.createdAt || order.date)}</p>
             <span className={`orders-payment-badge ${paymentBadge(order).cls}`}>
               {paymentBadge(order).label}
             </span>
@@ -415,7 +415,7 @@ function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel, onPay })
         <div className="orders-details-grid">
           <main className="orders-details-main">
             <div className="orders-info-grid">
-              <div><span>Payment</span><strong>{paymentBadge(order).label} � {paymentBadge(order).sub}</strong></div>
+              <div><span>Payment</span><strong>{paymentBadge(order).label} x {paymentBadge(order).sub}</strong></div>
               <div><span>Customer</span><strong>{customerName || "Walk-in"}</strong></div>
               <div><span>Phone</span><strong>{order.phone || "N/A"}</strong></div>
               <div><span>Waiter</span><strong>{order.waiterName || "N/A"}</strong></div>
@@ -436,7 +436,7 @@ function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel, onPay })
                       <strong>{item.name}</strong>
                       <p>{item.category || item.subtitle || "Menu Item"}</p>
                     </div>
-                    <span>{qty} � {money(order, price)}</span>
+                    <span>{qty} x {money(order, price)}</span>
                     <strong>{money(order, qty * price)}</strong>
                   </div>
                 );
@@ -1397,6 +1397,7 @@ export default function OrdersPanel({ token, onBack }) {
     </div>
   );
 }
+
 
 
 

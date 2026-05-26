@@ -1,0 +1,103 @@
+===== Corrupted Icon / Mojibake Report =====
+
+Path                                                                                LineNumber Line                                                                                         
+----                                                                                ---------- ----                                                                                         
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\AnalyticsPanel.jsx                   564                     {bestDay ? `Best net day: ${bestDay.date} · ${money(bestDay.net)}` :    
+                                                                                               "No daily finance yet"}                                                                      
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\CustomerPanel.jsx                     47           value={value ?? ""}                                                                
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\CustomerPanel.jsx                    152               {order.mode} · {order.paymentStatus} · {order.createdAt ? new                
+                                                                                               Date(order.createdAt).toLocaleString() : ""}                                                 
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\CustomerPanel.jsx                    449                     {selectedDetails.customer.phone} ·                                      
+                                                                                               {selectedDetails.customer.loyaltyPoints || 0} points                                         
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\DineInTableLayout.jsx                 25       icon: "✅",                                                                           
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\DineInTableLayout.jsx                 33       icon: "🍽️",                                                                       
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\DineInTableLayout.jsx                 41       icon: "📌",                                                                          
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\DineInTableLayout.jsx                 49       icon: "🧹",                                                                          
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\DineInTableLayout.jsx                 57       icon: "🔗",                                                                          
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\DineInTableLayout.jsx                122           <button className="floor-icon-btn" onClick={onClose}>✕</button>                  
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\DineInTableLayout.jsx                259           <strong>📌 {table.reservationName || "Reserved Guest"}</strong>                  
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\DineInTableLayout.jsx                892           <button className="floor-back" onClick={onBack}>← Back</button>                  
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\DriveThruPanel.jsx                   150             Vehicle: {ticket.vehicleNo || "N/A"} · {ticket.vehicleColor || "No color"}      
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\ExpensePanel.jsx                      59           value={value ?? ""}                                                                
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\InventoryPanel.jsx                   308                         <p className="nexa-small">{item.category} · {item.sku}</p>          
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\InventoryPanel.jsx                   480                     {movement.previousStock} → {movement.newStock}                         
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\MenuAdminPanel.jsx                    42   emoji: "🍽️",                                                                          
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\MenuAdminPanel.jsx                   101       emoji: item.emoji || "🍽️",                                                        
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\MenuAdminPanel.jsx                   170       emoji: itemForm.emoji || "🍽️",                                                    
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\MenuAdminPanel.jsx                   286                     <p className="nexa-small">{count} items · {category.isActive ? "Active" 
+                                                                                               : "Hidden"}</p>                                                                              
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\MenuAdminPanel.jsx                   343                   {item.emoji || "🍽️"}                                                  
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\MenuAdminPanel.jsx                   461             <div style={{ fontSize: 46 }}>{itemForm.emoji || "🍽️"}</div>                
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\MenuInventoryMappingPanel.jsx         34   return item.currentStock ?? item.stock ?? item.quantity ?? item.qty ?? 0;                  
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\MenuInventoryMappingPanel.jsx        229     if (!confirm(`Delete mapping "${mapping.menuItemName} →                                
+                                                                                               ${mapping.inventoryItemName}"?`)) return;                                                    
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\MenuInventoryMappingPanel.jsx        303                     <p className="nexa-small">→ {suggestion.inventoryItemName}</p>         
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\MenuInventoryMappingPanel.jsx        377                       {item.name} · {item.category || "Menu"}                               
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\MenuInventoryMappingPanel.jsx        403                       {getInventoryName(item)} · Stock {getStockValue(item)}                
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\OrdersPanel.jsx                      234                       <span>{money(order, item.price)} ? {item.qty}</span>                   
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\OrdersPanel.jsx                      406             <p>{normalizeMode(order.mode)} ? {formatDate(order.createdAt || order.date)}</p> 
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\OrdersPanel.jsx                      418               <div><span>Payment</span><strong>{paymentBadge(order).label} ?                 
+                                                                                               {paymentBadge(order).sub}</strong></div>                                                     
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\OrdersPanel.jsx                      439                     <span>{qty} ? {money(order, price)}</span>                               
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\PackageBuilderPanel.jsx               49           value={value ?? ""}                                                                
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\PackageBuilderPanel.jsx              473                           {tenant.restaurantName} · {tenant.ownerName}                      
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\PackageBuilderPanel.jsx              500                           {plan.name} · Rs {plan.monthlyPrice}/month                        
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\PackageBuilderPanel.jsx              545                     Monthly Rs {selectedPackageForAssign.monthlyPrice} · Yearly Rs          
+                                                                                               {selectedPackageForAssign.yearlyPrice} ·                                                    
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\PackageBuilderPanel.jsx              546                     Users {selectedPackageForAssign.maxUsers} · Branches                    
+                                                                                               {selectedPackageForAssign.maxBranches}                                                       
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\POSScreen.jsx                       1224       const systemDiscountAmount = Number(discountAmount ?? finalDiscountData?.totalDiscount 
+                                                                                               ?? 0);                                                                                       
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\POSScreen.jsx                       1229       const finalPayable = Math.max(0, Number(payableTotal ?? finalDiscountedSubtotal +      
+                                                                                               finalTax + finalService) - redeemAmount);                                                    
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\ReceiptModal.jsx                      68               Table {table?.name} · Order {table?.orderNo || "#NEW"} · Staff {table?.staff 
+                                                                                               || "Staff"}                                                                                  
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\RestaurantSettingsPanel.jsx          560           <button className="settings-back" onClick={onBack}>← Back</button>               
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\RestaurantSettingsPanel.jsx          607                     <option value="£">£</option>                                           
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\SplitBillModal.jsx                   181               Table {table.name} · Staff {table.staff || "Admin"} · Guests {table.guests   
+                                                                                               || 2}                                                                                        
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\SplitBillModal.jsx                   362                       Original Qty: {item.qty} · Unit Price Rs {item.price}                 
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\StaffPanel.jsx                       286                         <p className="nexa-small">{roleLabel(item.role)} · {item.shift}</p> 
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\StaffPanel.jsx                       429             <p className="nexa-small">{roleLabel(form.role)} · {form.shift}</p>             
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\StockMovementPanel.jsx               139                   Current: {item.currentStock ?? item.stock ?? item.quantity ?? 0}           
+                                                                                               {item.unit || "pcs"}                                                                         
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\StockMovementPanel.jsx               142                   Alert Level: {item.lowStockAlert ?? item.lowStock ?? item.minimumStock ??  
+                                                                                               0}                                                                                           
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\SubscriptionPanel.jsx                 43           value={value ?? ""}                                                                
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\SubscriptionPanel.jsx                517                       Rs {payment.amount} · {payment.months} months ·                      
+                                                                                               {payment.paymentMethod}                                                                      
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\SupplierPurchasePanel.jsx             49   return item.currentStock ?? item.stock ?? item.quantity ?? item.qty ?? 0;                  
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\SupplierPurchasePanel.jsx             60           value={value ?? ""}                                                                
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\SupplierPurchasePanel.jsx            166               <span>{item.qty} × {money(item.unitCost)}</span>                              
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\SupplierPurchasePanel.jsx            532                       {supplier.name} · Balance {money(supplier.balance)}                   
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\SupplierPurchasePanel.jsx            627                                 {getInventoryName(item)} · Stock {getStockValue(item)}      
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\SupplierPurchasePanel.jsx            680                           Current stock: {getStockValue(inv)} {inv.unit || inv.stockUnit ||  
+                                                                                               "pcs"} → After purchase:{" "}                                                              
+D:\ShazeeProjects\nexapos-pro\frontend\src\components\ThermalReceipt.jsx                   613                       <span>{split.label || `Guest ${index + 1}`} · {split.method}</span>   
+D:\ShazeeProjects\nexapos-pro\frontend\src\lib\data.js                                      59   { id: "m1", category: "Wings & Wraps", name: "Crispy Hot Wings", subtitle: "Crispy hot     
+                                                                                               wings", price: 300, discount: "", emoji: "🍗" },                                           
+D:\ShazeeProjects\nexapos-pro\frontend\src\lib\data.js                                      60   { id: "m2", category: "Wings & Wraps", name: "Crispy BBQ Wings", subtitle: "Crispy BBQ     
+                                                                                               wings", price: 700, discount: "", emoji: "🍖" },                                           
+D:\ShazeeProjects\nexapos-pro\frontend\src\lib\data.js                                      61   { id: "m3", category: "Wings & Wraps", name: "Grilled Peri Peri Wings", subtitle: "Grilled 
+                                                                                               peri peri wings", price: 599, discount: "15% off", emoji: "🔥" },                          
+D:\ShazeeProjects\nexapos-pro\frontend\src\lib\data.js                                      62   { id: "m4", category: "Wings & Wraps", name: "Signature Grilled Wrap", subtitle:           
+                                                                                               "Signature grilled wrap", price: 649, discount: "", emoji: "🌯" },                         
+D:\ShazeeProjects\nexapos-pro\frontend\src\lib\data.js                                      63   { id: "m5", category: "Wings & Wraps", name: "Signature Crispy Wrap", subtitle: "Signature 
+                                                                                               crispy wrap", price: 551, discount: "", emoji: "🥙" },                                     
+D:\ShazeeProjects\nexapos-pro\frontend\src\lib\data.js                                      64   { id: "m6", category: "Burgerz", name: "Khan Wrap", subtitle: "Testing tasty", price: 900, 
+                                                                                               discount: "", emoji: "🍔" },                                                               
+D:\ShazeeProjects\nexapos-pro\frontend\src\lib\data.js                                      65   { id: "m7", category: "Burgerz", name: "Pizza Fajita", subtitle: "Fajita cheesy pizza",    
+                                                                                               price: 820, discount: "", emoji: "🍕" },                                                   
+D:\ShazeeProjects\nexapos-pro\frontend\src\lib\data.js                                      66   { id: "m8", category: "Burgerz", name: "Cloud Pizza", subtitle: "Testing tasty", price:    
+                                                                                               1200, discount: "", emoji: "☁️" },                                                       
+D:\ShazeeProjects\nexapos-pro\frontend\src\lib\data.js                                      67   { id: "m9", category: "Fries Station", name: "Loaded Fries", subtitle: "Cheese fries with  
+                                                                                               sauce", price: 450, discount: "", emoji: "🍟" },                                           
+D:\ShazeeProjects\nexapos-pro\frontend\src\lib\data.js                                      68   { id: "m10", category: "Special Food", name: "Alfredo Pasta", subtitle: "Creamy pasta",    
+                                                                                               price: 980, discount: "10% off", emoji: "🍝" },                                            
+D:\ShazeeProjects\nexapos-pro\frontend\src\lib\data.js                                      69   { id: "m11", category: "Karahi", name: "Chicken Karahi", subtitle: "Fresh karahi with      
+                                                                                               spices", price: 1600, discount: "", emoji: "🍲" },                                         
+D:\ShazeeProjects\nexapos-pro\frontend\src\lib\data.js                                      70   { id: "m12", category: "Classic Food", name: "Chicken Biryani", subtitle: "Classic spicy   
+                                                                                               biryani", price: 380, discount: "", emoji: "🍛" }                                          
+
+
+

@@ -561,7 +561,7 @@ export default function AnalyticsPanel({ token, session, onBack }) {
                 <div>
                   <h2 style={{ margin: 0 }}>Daily Sales / Expenses / Net</h2>
                   <p className="nexa-section-sub">
-                    {bestDay ? `Best net day: ${bestDay.date} Â· ${money(bestDay.net)}` : "No daily finance yet"}
+                    {bestDay ? `Best net day: ${bestDay.date}  -  ${money(bestDay.net)}` : "No daily finance yet"}
                   </p>
                 </div>
                 <LineChart color="#a5f3fc" size={28} />
@@ -642,6 +642,7 @@ export default function AnalyticsPanel({ token, session, onBack }) {
     </div>
   );
 }
+
 
 
 
