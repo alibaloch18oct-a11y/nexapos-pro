@@ -11,10 +11,25 @@ const moduleLabels = {
 };
 
 const moduleIcons = {
-  walk_in: "ðŸš¶", take_away: "ðŸ›ï¸", delivery: "ðŸ›µ", dine_in: "ðŸ½ï¸", drive_thru: "ðŸš—",
-  kiosk: "â˜ï¸", orders: "ðŸ“‹", kds: "ðŸ–¥ï¸", settings: "ðŸ”", restaurant_settings: "âš™ï¸",
-  inventory: "ðŸ“¦", discounts: "ðŸ·ï¸", staff: "ðŸ‘¥", customers: "ðŸŽ", analytics: "ðŸ“ˆ",
-  expenses: "ðŸ’¸", supplier_purchases: "ðŸšš", stock_movements: "ðŸ”", menu_inventory_mapping: "ðŸ§¾"
+  walk_in: "WI",
+  take_away: "TA",
+  delivery: "DEL",
+  dine_in: "DI",
+  drive_thru: "DT",
+  kiosk: "KS",
+  orders: "ORD",
+  kds: "KDS",
+  settings: "MENU",
+  restaurant_settings: "SET",
+  inventory: "INV",
+  discounts: "DISC",
+  staff: "STAFF",
+  customers: "CUS",
+  analytics: "REP",
+  expenses: "EXP",
+  supplier_purchases: "SUP",
+  stock_movements: "STK",
+  menu_inventory_mapping: "MAP"
 };
 
 const restaurantModules = [
@@ -49,9 +64,9 @@ function normalizeUser(user) {
 function statusTone(user) {
   const expiry = user.expiryDate;
   const expired = expiry ? new Date(expiry) < new Date() : false;
-  if (!user.isActive) return { label: "Inactive", cls: "inactive", icon: "â›”" };
-  if (expired) return { label: "Expired", cls: "expired", icon: "â³" };
-  return { label: "Active", cls: "active", icon: "âœ…" };
+  if (!user.isActive) return { label: "Inactive", cls: "inactive", icon: "OFF" };
+  if (expired) return { label: "Expired", cls: "expired", icon: "EXP" };
+  return { label: "Active", cls: "active", icon: "ON" };
 }
 
 function initials(name) {
@@ -126,7 +141,7 @@ function ClientModal({ mode, user, packages, allModules, createdLogin, saving, o
             <h2>{editing ? "Edit Client Master Control" : "Create New Client"}</h2>
             <p>{editing ? "Edit login, modules, package, expiry and status." : "Create restaurant account, owner login, package and modules."}</p>
           </div>
-          <button className="sa-icon-btn" onClick={onClose}>Ã—</button>
+          <button className="sa-icon-btn" onClick={onClose}>x</button>
         </div>
 
         <div className="sa-modal-body">
@@ -170,7 +185,7 @@ function ClientModal({ mode, user, packages, allModules, createdLogin, saving, o
           <section className="sa-box full">
             <div className="sa-section-head"><h3>Module Access</h3><div className="sa-mini-actions"><button onClick={() => update("enabledModules", allModules)}>Enable All</button><button onClick={() => update("enabledModules", [])}>Clear</button></div></div>
             <div className="sa-module-grid">
-              {allModules.map((key) => <button key={key} className={`sa-module-chip ${form.enabledModules.includes(key) ? "active" : ""}`} onClick={() => toggleModule(key)}>{moduleIcons[key] || "â€¢"} {moduleLabels[key] || key}</button>)}
+              {allModules.map((key) => <button key={key} className={`sa-module-chip ${form.enabledModules.includes(key) ? "active" : ""}`} onClick={() => toggleModule(key)}>{moduleIcons[key] || "-"} {moduleLabels[key] || key}</button>)}
             </div>
           </section>
         </div>
@@ -193,7 +208,7 @@ function ClientCard({ user, onEdit, onToggle, onQuickDays }) {
     <div className="sa-card">
       <div className="sa-card-top">
         <div className="sa-avatar">{initials(data.restaurantName)}</div>
-        <div><h3>{data.restaurantName}</h3><p>{data.username} Â· {data.email || "No email"}</p><small>{data.phone || "No phone"}</small></div>
+        <div><h3>{data.restaurantName}</h3><p>{data.username}  -  {data.email || "No email"}</p><small>{data.phone || "No phone"}</small></div>
         <span className={`sa-status ${tone.cls}`}>{tone.icon} {tone.label}</span>
       </div>
 
@@ -204,7 +219,7 @@ function ClientCard({ user, onEdit, onToggle, onQuickDays }) {
       </div>
 
       <div className="sa-module-preview">
-        {modules.slice(0, 8).map((key) => <span key={key}>{moduleIcons[key] || "â€¢"} {moduleLabels[key] || key}</span>)}
+        {modules.slice(0, 8).map((key) => <span key={key}>{moduleIcons[key] || "-"} {moduleLabels[key] || key}</span>)}
         {modules.length > 8 ? <span>+{modules.length - 8}</span> : null}
       </div>
 
@@ -329,7 +344,7 @@ export default function SuperAdminDashboard({ token, onOpenModule }) {
       `}</style>
 
       <div className="sa-head">
-        <div><div className="sa-kicker">ðŸ‘‘ Super Admin Master Control</div><h1 className="sa-title">NexaPOS Command Center</h1><p className="sa-sub">Create clients, control logins, packages, subscription days, module access and status.</p></div>
+        <div><div className="sa-kicker">Super Admin Master Control</div><h1 className="sa-title">NexaPOS Command Center</h1><p className="sa-sub">Create clients, control logins, packages, subscription days, module access and status.</p></div>
         <div className="sa-head-actions"><button className="sa-primary-btn" onClick={() => { setCreatedLogin(null); setCreatingClient(true); }}>+ Add New Client</button><button className="sa-soft-btn" onClick={loadUsers}>Refresh</button><button className="sa-soft-btn" onClick={() => onOpenModule?.({ key: "super_packages", name: "Packages" })}>Package Builder</button><button className="sa-soft-btn" onClick={() => onOpenModule?.({ key: "super_subscriptions", name: "Subscriptions" })}>Subscriptions</button></div>
       </div>
 
@@ -344,4 +359,5 @@ export default function SuperAdminDashboard({ token, onOpenModule }) {
     </div>
   );
 }
+
 
