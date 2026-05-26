@@ -103,10 +103,30 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
   });
   const [demoSeeding, setDemoSeeding] = useState(false);
   const [demoStatus, setDemoStatus] = useState("");
+  const [displayMode, setDisplayMode] = useState("browser");
 
   useEffect(() => {
     const timer = setInterval(() => setClock(new Date()), 30000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    function syncDisplayMode() {
+      const standalone =
+        window.matchMedia?.("(display-mode: standalone)")?.matches ||
+        window.navigator.standalone === true;
+
+      setDisplayMode(standalone ? "standalone" : "browser");
+    }
+
+    syncDisplayMode();
+
+    const media = window.matchMedia?.("(display-mode: standalone)");
+    media?.addEventListener?.("change", syncDisplayMode);
+
+    return () => {
+      media?.removeEventListener?.("change", syncDisplayMode);
+    };
   }, []);
 
   async function loadStats() {
@@ -203,7 +223,7 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
   }
 
   return (
-    <div className="nexa-epos-dashboard">
+    <div className={`nexa-epos-dashboard ${displayMode === "browser" ? "chrome-browser-mode" : "desktop-standalone-mode"}`}>
       <style>
         {`
           .nexa-epos-dashboard {
@@ -695,6 +715,57 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
             line-height: 1.05;
             text-shadow: 0 4px 10px rgba(0,0,0,.55);
             white-space: nowrap;
+          }
+
+
+          /* Browser-only fix:
+             Chrome has less usable height because of tabs/address bar.
+             Installed desktop/PWA keeps original compact no-scroll layout. */
+          .nexa-epos-dashboard.chrome-browser-mode {
+            height: auto !important;
+            min-height: calc(100dvh - 94px) !important;
+            max-height: none !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            grid-template-rows: auto auto auto auto !important;
+            align-content: start !important;
+            padding-bottom: 18px !important;
+          }
+
+          .nexa-epos-dashboard.chrome-browser-mode .epos-center {
+            min-height: auto !important;
+            overflow: visible !important;
+            place-items: start center !important;
+            padding: 12px 0 22px !important;
+          }
+
+          .nexa-epos-dashboard.chrome-browser-mode .main-mode-grid {
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+            align-items: start !important;
+            gap: 22px 34px !important;
+            padding-bottom: 12px !important;
+          }
+
+          .nexa-epos-dashboard.chrome-browser-mode .mode-tile-wrap {
+            min-height: 156px !important;
+          }
+
+          .nexa-epos-dashboard.chrome-browser-mode .bottom-dock-zone {
+            min-height: 96px !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+
+          .nexa-epos-dashboard.chrome-browser-mode .dock-scroll {
+            height: auto !important;
+            min-height: 82px !important;
+            overflow: visible !important;
+          }
+
+          .nexa-epos-dashboard.desktop-standalone-mode {
+            overflow: hidden !important;
           }
 
           @media (max-height: 760px) {
