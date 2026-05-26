@@ -697,3 +697,4 @@ export default function RestaurantSettingsPanel({ token, session, onBack }) {
 }
 
 
+

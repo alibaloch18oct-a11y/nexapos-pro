@@ -345,7 +345,7 @@ function ModalShell({ title, onClose, children, wide }) {
           </div>
 
           <button className="pos-ghost-btn pos-modal-close" onClick={onClose}>
-            ?
+            ×
           </button>
         </div>
 
@@ -2513,7 +2513,7 @@ export default function POSScreen({ token, module, session, onBack }) {
       <div className="pro-pos-layout">
         <aside className="pro-panel pos-left">
           <button className="pos-back-btn" onClick={onBack}>
-            ? Back
+            ← Back
           </button>
 
           <div className="pos-title-card">
@@ -2920,6 +2920,7 @@ export default function POSScreen({ token, module, session, onBack }) {
     </div>
   );
 }
+
 
 
 

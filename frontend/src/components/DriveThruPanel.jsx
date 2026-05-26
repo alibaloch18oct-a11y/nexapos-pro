@@ -550,3 +550,4 @@ export default function DriveThruPanel({ token, session, onBack, onOpenPOS }) {
 }
 
 
+

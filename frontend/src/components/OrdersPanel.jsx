@@ -1298,7 +1298,7 @@ export default function OrdersPanel({ token, onBack }) {
 
       <div className="orders-head">
         <div>
-          <button className="orders-back" onClick={onBack}>? Back</button>
+          <button className="orders-back" onClick={onBack}>← Back</button>
           <h1 className="orders-title">Orders Management</h1>
           <p className="orders-sub">Edit orders, add/delete items, cancel orders and reprint receipts.</p>
         </div>
@@ -1397,6 +1397,7 @@ export default function OrdersPanel({ token, onBack }) {
     </div>
   );
 }
+
 
 
 
