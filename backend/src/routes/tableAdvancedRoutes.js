@@ -1,448 +1,191 @@
 const express = require("express");
 
 const router = express.Router();
-
-const defaultTables = [
-  { name: "T1", area: "Main Hall", seats: 4, status: "available", shape: "round" },
-  { name: "T2", area: "Main Hall", seats: 4, status: "available", shape: "round" },
-  { name: "T3", area: "Main Hall", seats: 6, status: "available", shape: "rect" },
-  { name: "T4", area: "Main Hall", seats: 2, status: "available", shape: "round" },
-  { name: "T5", area: "VIP Room", seats: 6, status: "reserved", shape: "rect" },
-  { name: "T6", area: "VIP Room", seats: 8, status: "available", shape: "rect" },
-  { name: "T7", area: "Family Zone", seats: 6, status: "available", shape: "rect" },
-  { name: "T8", area: "Family Zone", seats: 4, status: "cleaning", shape: "round" },
-  { name: "T9", area: "Outdoor", seats: 4, status: "available", shape: "round" },
-  { name: "T10", area: "Outdoor", seats: 2, status: "available", shape: "round" },
-  { name: "T11", area: "Outdoor", seats: 6, status: "available", shape: "rect" },
-  { name: "T12", area: "Main Hall", seats: 8, status: "available", shape: "rect" }
+const allowedStatuses = ["available", "occupied", "reserved", "cleaning", "merged"];
+const allowedShapes = ["round", "square", "rect", "booth"];
+const defaults = [
+  ["T1", "Main Hall", 4, "available", "round"],
+  ["T2", "Main Hall", 4, "available", "round"],
+  ["T3", "Main Hall", 6, "available", "rect"],
+  ["T4", "Main Hall", 2, "cleaning", "round"],
+  ["VIP 1", "VIP Room", 6, "reserved", "rect"],
+  ["VIP 2", "VIP Room", 8, "available", "rect"],
+  ["F1", "Family Zone", 6, "available", "rect"],
+  ["F2", "Family Zone", 4, "available", "round"],
+  ["O1", "Outdoor", 4, "available", "round"],
+  ["R1", "Rooftop", 8, "available", "rect"]
 ];
 
-const allowedStatuses = ["available", "occupied", "reserved", "cleaning", "merged"];
-
-function ensureCollections(db) {
+function now() { return new Date().toISOString(); }
+function ensure(db) {
   db.tables = Array.isArray(db.tables) ? db.tables : [];
+  db.orders = Array.isArray(db.orders) ? db.orders : [];
   db.auditLogs = Array.isArray(db.auditLogs) ? db.auditLogs : [];
   return db;
 }
-
 function tenantOnly(req, res, next) {
-  if (!req.user?.tenantId) {
-    return res.status(403).json({
-      message: "Restaurant account access required."
-    });
-  }
-
+  if (!req.user?.tenantId) return res.status(403).json({ message: "Restaurant account access required." });
   next();
 }
-
-function createTenantDefaultTables(db, tenantId) {
-  const existing = db.tables.filter((table) => table.tenantId === tenantId);
-
-  if (existing.length > 0) return existing;
-
-  const now = new Date().toISOString();
-
-  const created = defaultTables.map((table, index) => ({
-    id: `table-${tenantId}-${index + 1}`,
-    tenantId,
-    name: table.name,
-    area: table.area,
-    seats: table.seats,
-    status: table.status,
-    shape: table.shape,
-    waiterName: "",
-    currentOrderNo: "",
-    total: 0,
-    reservationName: table.status === "reserved" ? "VIP Guest" : "",
-    reservationPhone: table.status === "reserved" ? "03000000000" : "",
-    reservationTime: table.status === "reserved" ? "21:00" : "",
-    reservationNote: "",
-    mergedWith: [],
-    mergedMasterId: "",
-    createdAt: now,
-    updatedAt: now
+function id(tenantId) { return `table-${tenantId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`; }
+function norm(t) {
+  const seats = Math.max(1, Math.min(24, Number(t.seats || t.chairs || t.capacity || 4)));
+  const area = t.area || t.floor || t.section || "Main Hall";
+  return {
+    ...t,
+    id: t.id,
+    area,
+    floor: area,
+    seats,
+    chairs: seats,
+    status: allowedStatuses.includes(t.status) ? t.status : "available",
+    shape: allowedShapes.includes(t.shape) ? t.shape : seats > 4 ? "rect" : "round",
+    guests: Number(t.guests || 0),
+    waiterName: t.waiterName || t.staff || "",
+    staff: t.staff || t.waiterName || "",
+    currentOrderNo: t.currentOrderNo || t.orderNo || "",
+    orderNo: t.orderNo || t.currentOrderNo || "",
+    currentOrderIds: Array.isArray(t.currentOrderIds) ? t.currentOrderIds : [],
+    total: Number(t.total || 0),
+    reservationName: t.reservationName || "",
+    reservationPhone: t.reservationPhone || "",
+    reservationTime: t.reservationTime || "",
+    reservationNote: t.reservationNote || "",
+    mergedWith: Array.isArray(t.mergedWith) ? t.mergedWith : [],
+    mergedMasterId: t.mergedMasterId || "",
+    updatedAt: t.updatedAt || now(),
+    createdAt: t.createdAt || now()
+  };
+}
+function seed(db, req) {
+  const existing = db.tables.filter((t) => t.tenantId === req.user.tenantId);
+  if (existing.length) {
+    existing.forEach((t) => Object.assign(t, norm(t)));
+    return existing;
+  }
+  const created = defaults.map((row, index) => norm({
+    id: `table-${req.user.tenantId}-${index + 1}`,
+    tenantId: req.user.tenantId,
+    branchId: req.user.branchId || null,
+    name: row[0], area: row[1], floor: row[1], seats: row[2], chairs: row[2], status: row[3], shape: row[4],
+    reservationName: row[3] === "reserved" ? "VIP Guest" : "",
+    reservationPhone: row[3] === "reserved" ? "03000000000" : "",
+    reservationTime: row[3] === "reserved" ? "21:00" : ""
   }));
-
   db.tables.push(...created);
-
   return created;
 }
-
-function normalizeTable(table) {
-  return {
-    ...table,
-    seats: Number(table.seats || table.chairs || table.capacity || 4),
-    mergedWith: Array.isArray(table.mergedWith) ? table.mergedWith : [],
-    mergedMasterId: table.mergedMasterId || "",
-    reservationName: table.reservationName || "",
-    reservationPhone: table.reservationPhone || "",
-    reservationTime: table.reservationTime || "",
-    reservationNote: table.reservationNote || "",
-    waiterName: table.waiterName || "",
-    currentOrderNo: table.currentOrderNo || "",
-    total: Number(table.total || 0)
-  };
+function audit(db, req, action, details) {
+  db.auditLogs.push({ id: `audit-${Date.now()}`, tenantId: req.user.tenantId, action, actor: req.user.username, details, createdAt: now() });
+}
+function ordersFor(db, tenantId, table) {
+  const ids = Array.isArray(table.currentOrderIds) ? table.currentOrderIds : [];
+  return db.orders.filter((o) => o.tenantId === tenantId && (ids.includes(o.id) || o.tableId === table.id || o.table?.id === table.id));
+}
+function linkOrders(db, tenantId, orderIds, table) {
+  db.orders = db.orders.map((o) => {
+    if (o.tenantId !== tenantId || !orderIds.includes(o.id)) return o;
+    return { ...o, tableId: table.id, tableName: table.name, table: { ...(o.table || {}), id: table.id, name: table.name, floor: table.area, area: table.area }, updatedAt: now() };
+  });
+}
+function clear(table) {
+  table.status = "available"; table.guests = 0; table.waiterName = ""; table.staff = ""; table.currentOrderNo = ""; table.orderNo = ""; table.total = 0; table.currentOrderIds = []; table.reservationName = ""; table.reservationPhone = ""; table.reservationTime = ""; table.reservationNote = ""; table.mergedWith = []; table.mergedMasterId = ""; table.updatedAt = now();
 }
 
 module.exports = function tableAdvancedRoutes({ readDb, writeDb }) {
-  router.get("/", tenantOnly, (req, res) => {
-    const db = ensureCollections(readDb());
-
-    const tables = createTenantDefaultTables(db, req.user.tenantId)
-      .map(normalizeTable)
-      .sort((a, b) => {
-        const areaSort = String(a.area || "").localeCompare(String(b.area || ""));
-        if (areaSort !== 0) return areaSort;
-        return String(a.name || "").localeCompare(String(b.name || ""), undefined, { numeric: true });
-      });
-
+  router.get("/floor-plan", tenantOnly, (req, res) => {
+    const db = ensure(readDb());
+    const tables = seed(db, req).map(norm).sort((a,b) => String(a.area).localeCompare(String(b.area)) || String(a.name).localeCompare(String(b.name), undefined, { numeric: true }));
     writeDb(db);
+    res.json({ tables });
+  });
 
-    res.json({
-      tables
-    });
+  router.get("/:tableId/orders", tenantOnly, (req, res) => {
+    const db = ensure(readDb()); seed(db, req);
+    const table = db.tables.find((t) => t.tenantId === req.user.tenantId && t.id === req.params.tableId);
+    if (!table) return res.status(404).json({ message: "Table not found." });
+    res.json({ table: norm(table), orders: ordersFor(db, req.user.tenantId, norm(table)) });
   });
 
   router.post("/", tenantOnly, (req, res) => {
-    const db = ensureCollections(readDb());
-    const now = new Date().toISOString();
-
-    const table = {
-      id: `table-${req.user.tenantId}-${Date.now()}`,
-      tenantId: req.user.tenantId,
-      name: req.body.name || `T${Date.now()}`,
-      area: req.body.area || "Main Hall",
-      seats: Number(req.body.seats || 4),
-      status: allowedStatuses.includes(req.body.status) ? req.body.status : "available",
-      shape: req.body.shape || (Number(req.body.seats || 4) > 4 ? "rect" : "round"),
-      waiterName: "",
-      currentOrderNo: "",
-      total: 0,
-      reservationName: "",
-      reservationPhone: "",
-      reservationTime: "",
-      reservationNote: "",
-      mergedWith: [],
-      mergedMasterId: "",
-      createdAt: now,
-      updatedAt: now
-    };
-
-    db.tables.push(table);
-
-    db.auditLogs.push({
-      id: `audit-${Date.now()}`,
-      tenantId: req.user.tenantId,
-      action: "TABLE_CREATED",
-      actor: req.user.username,
-      details: table,
-      createdAt: now
-    });
-
-    writeDb(db);
-
-    res.status(201).json({
-      message: "Table created successfully.",
-      table: normalizeTable(table)
-    });
+    const db = ensure(readDb());
+    const seats = Math.max(1, Math.min(24, Number(req.body.seats || req.body.chairs || 4)));
+    const area = req.body.area || req.body.floor || "Main Hall";
+    const table = norm({ id: id(req.user.tenantId), tenantId: req.user.tenantId, branchId: req.user.branchId || null, name: req.body.name || `T${Date.now()}`, area, floor: area, seats, chairs: seats, status: req.body.status || "available", shape: req.body.shape || (seats > 4 ? "rect" : "round"), guests: req.body.guests || 0, waiterName: req.body.waiterName || req.body.staff || "", staff: req.body.staff || req.body.waiterName || "", reservationName: req.body.reservationName || "", reservationPhone: req.body.reservationPhone || "", reservationTime: req.body.reservationTime || "", reservationNote: req.body.reservationNote || "" });
+    db.tables.push(table); audit(db, req, "TABLE_CREATED", table); writeDb(db);
+    res.status(201).json({ message: "Table created successfully.", table });
   });
 
   router.patch("/:tableId", tenantOnly, (req, res) => {
-    const db = ensureCollections(readDb());
-    createTenantDefaultTables(db, req.user.tenantId);
-
-    const table = db.tables.find(
-      (item) => item.tenantId === req.user.tenantId && item.id === req.params.tableId
-    );
-
-    if (!table) {
-      return res.status(404).json({
-        message: "Table not found."
-      });
-    }
-
-    const before = { ...table };
-
-    const editableFields = [
-      "name",
-      "area",
-      "seats",
-      "status",
-      "shape",
-      "waiterName",
-      "currentOrderNo",
-      "total",
-      "reservationName",
-      "reservationPhone",
-      "reservationTime",
-      "reservationNote",
-      "mergedWith",
-      "mergedMasterId"
-    ];
-
-    editableFields.forEach((field) => {
-      if (req.body[field] !== undefined) {
-        table[field] = req.body[field];
-      }
-    });
-
-    table.seats = Number(table.seats || 4);
-    table.total = Number(table.total || 0);
-    table.mergedWith = Array.isArray(table.mergedWith) ? table.mergedWith : [];
-    table.mergedMasterId = table.mergedMasterId || "";
-
-    if (!allowedStatuses.includes(table.status)) {
-      table.status = "available";
-    }
-
-    if (table.status === "available") {
-      table.reservationName = table.reservationName || "";
-      table.reservationPhone = table.reservationPhone || "";
-      table.reservationTime = table.reservationTime || "";
-      table.reservationNote = table.reservationNote || "";
-    }
-
-    table.updatedAt = new Date().toISOString();
-    table.updatedBy = req.user.username;
-
-    db.auditLogs.push({
-      id: `audit-${Date.now()}`,
-      tenantId: req.user.tenantId,
-      action: "TABLE_UPDATED",
-      actor: req.user.username,
-      details: {
-        tableId: table.id,
-        tableName: table.name,
-        before,
-        after: table
-      },
-      createdAt: new Date().toISOString()
-    });
-
-    writeDb(db);
-
-    res.json({
-      message: "Table updated successfully.",
-      table: normalizeTable(table)
-    });
+    const db = ensure(readDb()); seed(db, req);
+    const table = db.tables.find((t) => t.tenantId === req.user.tenantId && t.id === req.params.tableId);
+    if (!table) return res.status(404).json({ message: "Table not found." });
+    const before = norm({ ...table });
+    const patch = req.body || {};
+    if (patch.name !== undefined) table.name = String(patch.name || table.name).trim();
+    if (patch.area !== undefined || patch.floor !== undefined) table.area = table.floor = patch.area || patch.floor || "Main Hall";
+    if (patch.seats !== undefined || patch.chairs !== undefined) table.seats = table.chairs = Math.max(1, Math.min(24, Number(patch.seats || patch.chairs || 4)));
+    if (patch.status !== undefined && allowedStatuses.includes(patch.status)) table.status = patch.status;
+    if (patch.shape !== undefined && allowedShapes.includes(patch.shape)) table.shape = patch.shape;
+    ["guests","total"].forEach((f) => { if (patch[f] !== undefined) table[f] = Number(patch[f] || 0); });
+    ["waiterName","staff","reservationName","reservationPhone","reservationTime","reservationNote","mergedMasterId"].forEach((f) => { if (patch[f] !== undefined) table[f] = String(patch[f] || ""); });
+    if (Array.isArray(patch.currentOrderIds)) table.currentOrderIds = patch.currentOrderIds;
+    if (Array.isArray(patch.mergedWith)) table.mergedWith = patch.mergedWith;
+    if (!table.staff && table.waiterName) table.staff = table.waiterName;
+    if (!table.waiterName && table.staff) table.waiterName = table.staff;
+    table.updatedAt = now(); Object.assign(table, norm(table));
+    audit(db, req, "TABLE_UPDATED", { before, after: table }); writeDb(db);
+    res.json({ message: "Table updated successfully.", table: norm(table) });
   });
 
   router.post("/move", tenantOnly, (req, res) => {
-    const { sourceTableId, targetTableId } = req.body;
-
-    if (!sourceTableId || !targetTableId) {
-      return res.status(400).json({
-        message: "Source and target table are required."
-      });
-    }
-
-    const db = ensureCollections(readDb());
-    createTenantDefaultTables(db, req.user.tenantId);
-
-    const source = db.tables.find(
-      (table) => table.tenantId === req.user.tenantId && table.id === sourceTableId
-    );
-    const target = db.tables.find(
-      (table) => table.tenantId === req.user.tenantId && table.id === targetTableId
-    );
-
-    if (!source || !target) {
-      return res.status(404).json({
-        message: "Source or target table not found."
-      });
-    }
-
-    const sourceBefore = { ...source };
-    const targetBefore = { ...target };
-
-    target.status = source.status;
-    target.waiterName = source.waiterName || "";
-    target.currentOrderNo = source.currentOrderNo || "";
-    target.total = Number(source.total || 0);
-    target.reservationName = source.reservationName || "";
-    target.reservationPhone = source.reservationPhone || "";
-    target.reservationTime = source.reservationTime || "";
-    target.reservationNote = source.reservationNote || "";
-    target.updatedAt = new Date().toISOString();
-    target.updatedBy = req.user.username;
-
-    source.status = "available";
-    source.waiterName = "";
-    source.currentOrderNo = "";
-    source.total = 0;
-    source.reservationName = "";
-    source.reservationPhone = "";
-    source.reservationTime = "";
-    source.reservationNote = "";
-    source.mergedWith = [];
-    source.mergedMasterId = "";
-    source.updatedAt = new Date().toISOString();
-    source.updatedBy = req.user.username;
-
-    db.auditLogs.push({
-      id: `audit-${Date.now()}`,
-      tenantId: req.user.tenantId,
-      action: "TABLE_MOVED",
-      actor: req.user.username,
-      details: {
-        sourceBefore,
-        targetBefore,
-        sourceAfter: source,
-        targetAfter: target
-      },
-      createdAt: new Date().toISOString()
-    });
-
-    writeDb(db);
-
-    res.json({
-      message: "Table moved successfully.",
-      source: normalizeTable(source),
-      target: normalizeTable(target)
-    });
+    const db = ensure(readDb()); seed(db, req);
+    const sourceId = req.body.sourceTableId || req.body.fromTableId;
+    const targetId = req.body.targetTableId || req.body.toTableId;
+    const source = db.tables.find((t) => t.tenantId === req.user.tenantId && t.id === sourceId);
+    const target = db.tables.find((t) => t.tenantId === req.user.tenantId && t.id === targetId);
+    if (!source || !target) return res.status(404).json({ message: "Source or target table not found." });
+    if (source.id === target.id) return res.status(400).json({ message: "You cannot move table to itself." });
+    if (target.status === "occupied") return res.status(400).json({ message: "Target table is occupied. Use merge instead." });
+    const orderIds = Array.isArray(source.currentOrderIds) ? [...source.currentOrderIds] : [];
+    Object.assign(target, { status: source.status === "available" ? "occupied" : source.status, guests: source.guests || 0, waiterName: source.waiterName || source.staff || "", staff: source.staff || source.waiterName || "", currentOrderNo: source.currentOrderNo || source.orderNo || "", orderNo: source.orderNo || source.currentOrderNo || "", total: Number(source.total || 0), currentOrderIds: orderIds, reservationName: source.reservationName || "", reservationPhone: source.reservationPhone || "", reservationTime: source.reservationTime || "", reservationNote: source.reservationNote || "", updatedAt: now() });
+    linkOrders(db, req.user.tenantId, orderIds, target); clear(source); audit(db, req, "TABLE_MOVED", { sourceId, targetId, orderIds }); writeDb(db);
+    res.json({ message: `Table moved to ${target.name}.`, source: norm(source), target: norm(target) });
   });
 
   router.post("/merge", tenantOnly, (req, res) => {
-    const { masterTableId, targetTableId } = req.body;
-
-    if (!masterTableId || !targetTableId) {
-      return res.status(400).json({
-        message: "Master and target table are required."
-      });
-    }
-
-    const db = ensureCollections(readDb());
-    createTenantDefaultTables(db, req.user.tenantId);
-
-    const master = db.tables.find(
-      (table) => table.tenantId === req.user.tenantId && table.id === masterTableId
-    );
-    const target = db.tables.find(
-      (table) => table.tenantId === req.user.tenantId && table.id === targetTableId
-    );
-
-    if (!master || !target) {
-      return res.status(404).json({
-        message: "Master or target table not found."
-      });
-    }
-
+    const db = ensure(readDb()); seed(db, req);
+    const masterId = req.body.masterTableId;
+    const childId = req.body.targetTableId || req.body.sourceTableId;
+    const master = db.tables.find((t) => t.tenantId === req.user.tenantId && t.id === masterId);
+    const child = db.tables.find((t) => t.tenantId === req.user.tenantId && t.id === childId);
+    if (!master || !child) return res.status(404).json({ message: "Master or target table not found." });
+    if (master.id === child.id) return res.status(400).json({ message: "You cannot merge table with itself." });
     master.mergedWith = Array.isArray(master.mergedWith) ? master.mergedWith : [];
-
-    if (!master.mergedWith.includes(target.id)) {
-      master.mergedWith.push(target.id);
-    }
-
-    if (master.status === "available") {
-      master.status = "occupied";
-    }
-
-    master.updatedAt = new Date().toISOString();
-    master.updatedBy = req.user.username;
-
-    target.status = "merged";
-    target.mergedMasterId = master.id;
-    target.updatedAt = new Date().toISOString();
-    target.updatedBy = req.user.username;
-
-    db.auditLogs.push({
-      id: `audit-${Date.now()}`,
-      tenantId: req.user.tenantId,
-      action: "TABLES_MERGED",
-      actor: req.user.username,
-      details: {
-        masterTableId: master.id,
-        targetTableId: target.id
-      },
-      createdAt: new Date().toISOString()
-    });
-
-    writeDb(db);
-
-    res.json({
-      message: "Tables merged successfully.",
-      master: normalizeTable(master),
-      target: normalizeTable(target)
-    });
+    if (!master.mergedWith.includes(child.id)) master.mergedWith.push(child.id);
+    const ids = [...new Set([...(master.currentOrderIds || []), ...(child.currentOrderIds || [])])];
+    master.status = "occupied"; master.guests = Number(master.guests || 0) + Number(child.guests || 0); master.total = Number(master.total || 0) + Number(child.total || 0); master.currentOrderIds = ids; master.orderNo = master.orderNo || child.orderNo || child.currentOrderNo || ""; master.currentOrderNo = master.currentOrderNo || child.currentOrderNo || child.orderNo || ""; master.waiterName = master.waiterName || child.waiterName || child.staff || ""; master.staff = master.staff || child.staff || child.waiterName || ""; master.updatedAt = now();
+    child.status = "merged"; child.mergedMasterId = master.id; child.updatedAt = now();
+    linkOrders(db, req.user.tenantId, child.currentOrderIds || [], master); audit(db, req, "TABLES_MERGED", { masterId, childId, orderIds: ids }); writeDb(db);
+    res.json({ message: `Table ${child.name} merged into ${master.name}.`, master: norm(master), target: norm(child) });
   });
 
   router.post("/unmerge", tenantOnly, (req, res) => {
-    const { tableId } = req.body;
-
-    if (!tableId) {
-      return res.status(400).json({
-        message: "Table ID is required."
-      });
-    }
-
-    const db = ensureCollections(readDb());
-    createTenantDefaultTables(db, req.user.tenantId);
-
-    const table = db.tables.find(
-      (item) => item.tenantId === req.user.tenantId && item.id === tableId
-    );
-
-    if (!table) {
-      return res.status(404).json({
-        message: "Table not found."
-      });
-    }
-
+    const db = ensure(readDb()); seed(db, req);
+    const table = db.tables.find((t) => t.tenantId === req.user.tenantId && t.id === req.body.tableId);
+    if (!table) return res.status(404).json({ message: "Table not found." });
     const affected = [];
-
     if (table.mergedMasterId) {
-      const master = db.tables.find(
-        (item) => item.tenantId === req.user.tenantId && item.id === table.mergedMasterId
-      );
-
-      if (master) {
-        master.mergedWith = (master.mergedWith || []).filter((id) => id !== table.id);
-        master.updatedAt = new Date().toISOString();
-        master.updatedBy = req.user.username;
-        affected.push(master);
-      }
-
-      table.mergedMasterId = "";
-      table.status = "available";
-      table.updatedAt = new Date().toISOString();
-      table.updatedBy = req.user.username;
-      affected.push(table);
+      const master = db.tables.find((t) => t.tenantId === req.user.tenantId && t.id === table.mergedMasterId);
+      if (master) { master.mergedWith = (master.mergedWith || []).filter((id) => id !== table.id); master.updatedAt = now(); affected.push(norm(master)); }
+      table.mergedMasterId = ""; table.status = "available"; table.updatedAt = now(); affected.push(norm(table));
     } else {
-      const childIds = Array.isArray(table.mergedWith) ? table.mergedWith : [];
-      table.mergedWith = [];
-      table.updatedAt = new Date().toISOString();
-      table.updatedBy = req.user.username;
-      affected.push(table);
-
-      db.tables.forEach((item) => {
-        if (item.tenantId === req.user.tenantId && childIds.includes(item.id)) {
-          item.mergedMasterId = "";
-          item.status = "available";
-          item.updatedAt = new Date().toISOString();
-          item.updatedBy = req.user.username;
-          affected.push(item);
-        }
-      });
+      const ids = Array.isArray(table.mergedWith) ? [...table.mergedWith] : [];
+      table.mergedWith = []; table.updatedAt = now(); affected.push(norm(table));
+      db.tables.forEach((t) => { if (t.tenantId === req.user.tenantId && ids.includes(t.id)) { t.mergedMasterId = ""; t.status = "available"; t.updatedAt = now(); affected.push(norm(t)); } });
     }
-
-    db.auditLogs.push({
-      id: `audit-${Date.now()}`,
-      tenantId: req.user.tenantId,
-      action: "TABLES_UNMERGED",
-      actor: req.user.username,
-      details: {
-        tableId,
-        affectedTableIds: affected.map((item) => item.id)
-      },
-      createdAt: new Date().toISOString()
-    });
-
-    writeDb(db);
-
-    res.json({
-      message: "Tables unmerged successfully.",
-      tables: affected.map(normalizeTable)
-    });
+    audit(db, req, "TABLES_UNMERGED", { tableId: table.id, affectedTableIds: affected.map((t) => t.id) }); writeDb(db);
+    res.json({ message: "Tables unmerged successfully.", tables: affected });
   });
 
   return router;

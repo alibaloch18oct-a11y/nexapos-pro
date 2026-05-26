@@ -138,8 +138,11 @@ module.exports = function orderEditRoutes({ readDb, writeDb }) {
     order.customer = req.body.customer ?? order.customer;
     order.phone = req.body.phone ?? order.phone;
 
-    order.orderStatus = req.body.orderStatus || order.orderStatus || "placed";
-    order.kitchenStatus = req.body.kitchenStatus || "placed";
+    const requestedOrderStatus = String(req.body.orderStatus || order.orderStatus || "placed").trim().toLowerCase();
+    const requestedKitchenStatus = String(req.body.kitchenStatus || "placed").trim().toLowerCase();
+
+    order.orderStatus = requestedOrderStatus === "served" ? "completed" : requestedOrderStatus;
+    order.kitchenStatus = requestedKitchenStatus === "served" ? "completed" : requestedKitchenStatus;
     order.editedAt = new Date().toISOString();
     order.editedBy = req.user.username;
     order.updatedAt = new Date().toISOString();
@@ -216,9 +219,12 @@ module.exports = function orderEditRoutes({ readDb, writeDb }) {
     order.paidBy = req.user.username;
     order.updatedAt = new Date().toISOString();
 
-    if (order.kitchenStatus === "cash_received") {
+    if (order.kitchenStatus === "cash_received" || order.kitchenStatus === "served") {
       order.orderStatus = "completed";
-    } else if (!["served", "completed"].includes(order.orderStatus)) {
+      order.kitchenStatus = "completed";
+    } else if (order.orderStatus === "served") {
+      order.orderStatus = "completed";
+    } else if (!["completed"].includes(order.orderStatus)) {
       order.orderStatus = order.orderStatus || "placed";
     }
 

@@ -1321,10 +1321,12 @@ app.patch("/api/orders/:orderId/kitchen-status", requireAuth, tenantOnly, (req, 
   const order = db.orders.find((item) => item.id === orderId && item.tenantId === req.user.tenantId);
   if (!order) return res.status(404).json({ message: "Order not found." });
 
-  order.kitchenStatus = kitchenStatus;
+  const finalKitchenStatus = kitchenStatus === "served" ? "completed" : kitchenStatus;
+
+  order.kitchenStatus = finalKitchenStatus;
   order.updatedAt = new Date().toISOString();
 
-  if (kitchenStatus === "completed" || kitchenStatus === "served") {
+  if (finalKitchenStatus === "completed") {
     order.orderStatus = "completed";
   }
 
@@ -1353,6 +1355,8 @@ app.patch("/api/orders/:orderId/payment", requireAuth, tenantOnly, (req, res) =>
 
   res.json({ message: "Payment updated.", order });
 });
+
+app.use("/api/order-status", requireAuth, orderStatusRoutes({ readDb, writeDb }));
 
 app.use("/api/super-admin-control", requireAuth, superAdminControlRoutes({ readDb, writeDb }));
 

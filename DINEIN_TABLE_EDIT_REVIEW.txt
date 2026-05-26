@@ -1,0 +1,1964 @@
+===== DineInTableLayout.jsx =====
+import React, { useEffect, useMemo, useState } from "react";
+import { api } from "../lib/api";
+
+const defaultAreas = ["Main Hall", "VIP Room", "Family Zone", "Outdoor", "Rooftop"];
+
+const fallbackTables = [
+  { id: "t-1", name: "T1", area: "Main Hall", seats: 4, status: "available", shape: "round" },
+  { id: "t-2", name: "T2", area: "Main Hall", seats: 4, status: "occupied", shape: "round", waiterName: "Ali Waiter", currentOrderNo: "C-004" },
+  { id: "t-3", name: "T3", area: "Main Hall", seats: 6, status: "available", shape: "rect" },
+  { id: "t-4", name: "T4", area: "Main Hall", seats: 2, status: "cleaning", shape: "round" },
+  { id: "t-5", name: "VIP 1", area: "VIP Room", seats: 6, status: "reserved", shape: "rect", reservationName: "VIP Guest", reservationPhone: "03000000000", reservationTime: "9:00 PM" },
+  { id: "t-6", name: "VIP 2", area: "VIP Room", seats: 8, status: "available", shape: "rect" },
+  { id: "t-7", name: "F1", area: "Family Zone", seats: 6, status: "occupied", shape: "rect", waiterName: "Hassan", currentOrderNo: "C-007" },
+  { id: "t-8", name: "F2", area: "Family Zone", seats: 4, status: "available", shape: "round" },
+  { id: "t-9", name: "O1", area: "Outdoor", seats: 4, status: "available", shape: "round" },
+  { id: "t-10", name: "O2", area: "Outdoor", seats: 2, status: "available", shape: "round" },
+  { id: "t-11", name: "R1", area: "Rooftop", seats: 6, status: "reserved", shape: "rect", reservationName: "Family Dinner", reservationPhone: "03210000000", reservationTime: "8:30 PM" },
+  { id: "t-12", name: "R2", area: "Rooftop", seats: 8, status: "available", shape: "rect" }
+];
+
+function statusTone(status) {
+  const map = {
+    available: {
+      label: "Available",
+      icon: "…",
+      color: "#86efac",
+      bg: "rgba(34,197,94,.14)",
+      border: "rgba(34,197,94,.35)",
+      glow: "rgba(34,197,94,.24)"
+    },
+    occupied: {
+      label: "Occupied",
+      icon: "",
+      color: "#fca5a5",
+      bg: "rgba(239,68,68,.14)",
+      border: "rgba(239,68,68,.35)",
+      glow: "rgba(239,68,68,.24)"
+    },
+    reserved: {
+      label: "Reserved",
+      icon: "",
+      color: "#fde68a",
+      bg: "rgba(250,204,21,.14)",
+      border: "rgba(250,204,21,.35)",
+      glow: "rgba(250,204,21,.24)"
+    },
+    cleaning: {
+      label: "Cleaning",
+      icon: "",
+      color: "#93c5fd",
+      bg: "rgba(59,130,246,.14)",
+      border: "rgba(59,130,246,.35)",
+      glow: "rgba(59,130,246,.24)"
+    },
+    merged: {
+      label: "Merged",
+      icon: "",
+      color: "#c4b5fd",
+      bg: "rgba(168,85,247,.14)",
+      border: "rgba(168,85,247,.35)",
+      glow: "rgba(168,85,247,.24)"
+    }
+  };
+
+  return map[status] || map.available;
+}
+
+function normalizeTable(table, index) {
+  const seats = Number(table.seats || table.chairs || table.capacity || 4);
+
+  return {
+    id: table.id || table.tableId || `table-${index + 1}`,
+    name: table.name || table.tableNo || `T${index + 1}`,
+    area: table.area || table.section || "Main Hall",
+    seats,
+    status: table.status || table.tableStatus || "available",
+    shape: table.shape || (seats > 4 ? "rect" : "round"),
+    waiterName: table.waiterName || "",
+    currentOrderNo: table.currentOrderNo || "",
+    total: Number(table.total || 0),
+    reservationName: table.reservationName || "",
+    reservationPhone: table.reservationPhone || "",
+    reservationTime: table.reservationTime || "",
+    reservationNote: table.reservationNote || "",
+    mergedWith: Array.isArray(table.mergedWith) ? table.mergedWith : [],
+    mergedMasterId: table.mergedMasterId || ""
+  };
+}
+
+function Chair({ position }) {
+  return <div className={`floor-chair ${position}`} />;
+}
+
+function TableFormModal({ table, onClose, onSave }) {
+  const isEdit = Boolean(table?.id);
+
+  const [form, setForm] = useState({
+    name: table?.name || "",
+    area: table?.area || "Main Hall",
+    seats: table?.seats || 4,
+    shape: table?.shape || "round",
+    status: table?.status || "available",
+    reservationName: table?.reservationName || "",
+    reservationPhone: table?.reservationPhone || "",
+    reservationTime: table?.reservationTime || "",
+    reservationNote: table?.reservationNote || ""
+  });
+
+  function update(key, value) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  return (
+    <div className="floor-modal-backdrop">
+      <div className="floor-modal">
+        <div className="floor-modal-head">
+          <div>
+            <h2>{isEdit ? `Edit ${table.name}` : "Add New Table"}</h2>
+            <p>Change table name, area, chairs, shape and status.</p>
+          </div>
+
+          <button className="floor-icon-btn" onClick={onClose}>x</button>
+        </div>
+
+        <div className="floor-form-grid">
+          <label>
+            <span>Table Name</span>
+            <input value={form.name} onChange={(e) => update("name", e.target.value)} placeholder="T1 / VIP 1" />
+          </label>
+
+          <label>
+            <span>Area</span>
+            <input value={form.area} onChange={(e) => update("area", e.target.value)} placeholder="Main Hall" />
+          </label>
+
+          <label>
+            <span>Chairs / Seats</span>
+            <input type="number" min="1" max="20" value={form.seats} onChange={(e) => update("seats", Number(e.target.value || 1))} />
+          </label>
+
+          <label>
+            <span>Shape</span>
+            <select value={form.shape} onChange={(e) => update("shape", e.target.value)}>
+              <option value="round">Round</option>
+              <option value="rect">Rectangle</option>
+              <option value="booth">Booth</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Status</span>
+            <select value={form.status} onChange={(e) => update("status", e.target.value)}>
+              <option value="available">Available</option>
+              <option value="occupied">Occupied</option>
+              <option value="reserved">Reserved</option>
+              <option value="cleaning">Cleaning</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Reservation Name</span>
+            <input value={form.reservationName} onChange={(e) => update("reservationName", e.target.value)} />
+          </label>
+
+          <label>
+            <span>Reservation Phone</span>
+            <input value={form.reservationPhone} onChange={(e) => update("reservationPhone", e.target.value)} />
+          </label>
+
+          <label>
+            <span>Reservation Time</span>
+            <input value={form.reservationTime} onChange={(e) => update("reservationTime", e.target.value)} placeholder="8:30 PM" />
+          </label>
+        </div>
+
+        <label className="floor-field">
+          <span>Reservation Note</span>
+          <input value={form.reservationNote} onChange={(e) => update("reservationNote", e.target.value)} placeholder="Birthday, VIP guest, family dinner..." />
+        </label>
+
+        <div className="floor-modal-actions">
+          <button className="floor-soft-btn" onClick={onClose}>Cancel</button>
+          <button className="floor-primary-btn" onClick={() => onSave(table, form)}>
+            {isEdit ? "Save Table" : "Create Table"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TableCard({ table, allTables, onOpenOrder, onEdit, onStatusChange }) {
+  const tone = statusTone(table.status);
+  const chairs = Math.min(10, Math.max(1, Number(table.seats || 4)));
+  const isMergedChild = Boolean(table.mergedMasterId);
+
+  const chairPositions = [
+    "top-left",
+    "top",
+    "top-right",
+    "right-top",
+    "right-bottom",
+    "bottom-right",
+    "bottom",
+    "bottom-left",
+    "left-bottom",
+    "left-top"
+  ].slice(0, chairs);
+
+  const mergedNames = table.mergedWith
+    .map((id) => allTables.find((item) => item.id === id)?.name)
+    .filter(Boolean)
+    .join(", ");
+
+  const canOpenOrder = table.status !== "cleaning" && !isMergedChild;
+
+  return (
+    <div className={`floor-table-card ${table.shape} ${isMergedChild ? "locked" : ""}`} style={{ borderColor: tone.border, boxShadow: `0 20px 55px ${tone.glow}` }}>
+      <div className="floor-status-pill" style={{ color: tone.color, background: tone.bg, borderColor: tone.border }}>
+        {isMergedChild ? "Merged Child" : tone.label}
+      </div>
+
+      <div className="floor-table-stage">
+        {chairPositions.map((position) => (
+          <Chair key={position} position={position} />
+        ))}
+
+        <button
+          className={`floor-table-core ${table.shape}`}
+          onClick={() => canOpenOrder && onOpenOrder(table)}
+          style={{
+            borderColor: tone.border,
+            background: `radial-gradient(circle at top left, ${tone.bg}, rgba(15,23,42,.96))`,
+            cursor: canOpenOrder ? "pointer" : "not-allowed"
+          }}
+        >
+          <strong>{table.name}</strong>
+          <span>{table.seats} chairs</span>
+        </button>
+      </div>
+
+      <div className="floor-card-info">
+        <div>
+          <h3>{table.name}</h3>
+          <p>{table.area}</p>
+        </div>
+        <div className="floor-capacity">{table.seats} seats</div>
+      </div>
+
+      {table.waiterName || table.currentOrderNo ? (
+        <div className="floor-info-box blue">
+          {table.currentOrderNo ? <strong>Order: {table.currentOrderNo}</strong> : null}
+          {table.waiterName ? <span>Waiter: {table.waiterName}</span> : null}
+        </div>
+      ) : null}
+
+      {table.reservationName || table.reservationPhone || table.reservationTime ? (
+        <div className="floor-info-box yellow">
+          <strong> {table.reservationName || "Reserved Guest"}</strong>
+          {table.reservationPhone ? <span>{table.reservationPhone}</span> : null}
+          {table.reservationTime ? <span>{table.reservationTime}</span> : null}
+          {table.reservationNote ? <span>{table.reservationNote}</span> : null}
+        </div>
+      ) : null}
+
+      {table.mergedWith.length > 0 || table.mergedMasterId ? (
+        <div className="floor-info-box purple">
+          {table.mergedMasterId ? (
+            <strong>Merged into {allTables.find((item) => item.id === table.mergedMasterId)?.name || "another table"}</strong>
+          ) : (
+            <strong>Merged with {mergedNames || "selected tables"}</strong>
+          )}
+        </div>
+      ) : null}
+
+      <div className="floor-quick-row">
+        <button onClick={() => onStatusChange(table, "available")}>Available</button>
+        <button onClick={() => onStatusChange(table, "occupied")}>Occupied</button>
+        <button onClick={() => onStatusChange(table, "cleaning")}>Cleaning</button>
+      </div>
+
+      <div className="floor-actions">
+        <button className="floor-open-btn" disabled={!canOpenOrder} onClick={() => onOpenOrder(table)}>Open Order</button>
+        <button className="floor-edit-btn" onClick={() => onEdit(table)}>Edit Table</button>
+      </div>
+    </div>
+  );
+}
+
+export default function DineInTableLayout({ token, session, onBack, onOpenOrder }) {
+  const [tables, setTables] = useState([]);
+  const [activeArea, setActiveArea] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [editingTable, setEditingTable] = useState(null);
+  const [addingTable, setAddingTable] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  async function loadTables() {
+    setLoading(true);
+
+    try {
+      const res = await api(token).get("/api/tables");
+      const list = Array.isArray(res.data) ? res.data : res.data.tables || [];
+      setTables((list.length ? list : fallbackTables).map(normalizeTable));
+    } catch {
+      setTables(fallbackTables.map(normalizeTable));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadTables();
+  }, []);
+
+  const areas = useMemo(() => {
+    return ["All", ...new Set([...defaultAreas, ...tables.map((table) => table.area)])];
+  }, [tables]);
+
+  const filteredTables = useMemo(() => {
+    const q = search.toLowerCase();
+
+    return tables.filter((table) => {
+      const byArea = activeArea === "All" || table.area === activeArea;
+      const byStatus = statusFilter === "all" || table.status === statusFilter;
+      const bySearch =
+        !q ||
+        String(table.name || "").toLowerCase().includes(q) ||
+        String(table.area || "").toLowerCase().includes(q) ||
+        String(table.waiterName || "").toLowerCase().includes(q) ||
+        String(table.currentOrderNo || "").toLowerCase().includes(q) ||
+        String(table.reservationName || "").toLowerCase().includes(q) ||
+        String(table.reservationPhone || "").toLowerCase().includes(q);
+
+      return byArea && byStatus && bySearch;
+    });
+  }, [tables, activeArea, statusFilter, search]);
+
+  async function persistTable(tableId, data) {
+    try {
+      await api(token).patch(`/api/tables/${tableId}`, data);
+    } catch {
+      // UI stays working even if backend table route is unavailable.
+    }
+  }
+
+  async function saveTable(table, form) {
+    const payload = {
+      ...form,
+      seats: Number(form.seats || 4),
+      reservationName: form.status === "reserved" ? form.reservationName || "Reserved Guest" : form.reservationName,
+      updatedAt: new Date().toISOString()
+    };
+
+    if (table?.id) {
+      setTables((prev) => prev.map((item) => (item.id === table.id ? { ...item, ...payload } : item)));
+      await persistTable(table.id, payload);
+      setEditingTable(null);
+      return;
+    }
+
+    const newTable = {
+      id: `table-${Date.now()}`,
+      ...payload,
+      waiterName: "",
+      currentOrderNo: "",
+      total: 0,
+      mergedWith: [],
+      mergedMasterId: ""
+    };
+
+    setTables((prev) => [...prev, newTable]);
+
+    try {
+      await api(token).post("/api/tables", newTable);
+      await loadTables();
+    } catch {
+      // local preview fallback
+    }
+
+    setAddingTable(false);
+  }
+
+  async function updateTableStatus(table, status) {
+    const payload =
+      status === "available"
+        ? {
+            status,
+            reservationName: "",
+            reservationPhone: "",
+            reservationTime: "",
+            reservationNote: ""
+          }
+        : { status };
+
+    setTables((prev) => prev.map((item) => (item.id === table.id ? { ...item, ...payload } : item)));
+    await persistTable(table.id, payload);
+  }
+
+  async function seedDemoData() {
+    try {
+      const res = await api(token).post("/api/demo-polish/seed");
+      alert(res.data.message || "Demo data added successfully.");
+      await loadTables();
+    } catch (error) {
+      alert(error.response?.data?.message || "Demo seed route not ready. Add backend route from next step.");
+    }
+  }
+
+  const stats = {
+    available: tables.filter((table) => table.status === "available").length,
+    occupied: tables.filter((table) => table.status === "occupied").length,
+    reserved: tables.filter((table) => table.status === "reserved").length,
+    cleaning: tables.filter((table) => table.status === "cleaning").length
+  };
+
+  return (
+    <div className="floor-page">
+      <style>{`
+        .floor-page {
+          min-height: 100vh;
+          padding: 18px;
+          color: white;
+          background:
+            radial-gradient(circle at 12% 16%, rgba(34,211,238,.13), transparent 28%),
+            radial-gradient(circle at 84% 12%, rgba(168,85,247,.13), transparent 30%),
+            linear-gradient(180deg,#020617,#071028);
+        }
+
+        .floor-head {
+          display: flex;
+          justify-content: space-between;
+          gap: 14px;
+          align-items: start;
+          margin-bottom: 16px;
+        }
+
+        .floor-title {
+          margin: 12px 0 4px;
+          font-size: 36px;
+          font-weight: 1000;
+          letter-spacing: -.045em;
+        }
+
+        .floor-sub {
+          margin: 0;
+          color: #94a3b8;
+        }
+
+        .floor-back,
+        .floor-soft-btn,
+        .floor-primary-btn,
+        .floor-icon-btn {
+          border: 0;
+          color: white;
+          font-weight: 900;
+          cursor: pointer;
+          transition: .18s ease;
+        }
+
+        .floor-back,
+        .floor-soft-btn,
+        .floor-icon-btn {
+          background: rgba(255,255,255,.08);
+          border: 1px solid rgba(255,255,255,.10);
+        }
+
+        .floor-back,
+        .floor-soft-btn,
+        .floor-primary-btn {
+          height: 44px;
+          padding: 0 15px;
+          border-radius: 15px;
+        }
+
+        .floor-primary-btn {
+          background: linear-gradient(135deg,#06b6d4,#2563eb);
+        }
+
+        .floor-head-actions {
+          display: flex;
+          gap: 9px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+
+        .floor-stats {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 12px;
+          margin-bottom: 14px;
+        }
+
+        .floor-stat {
+          padding: 14px;
+          border-radius: 22px;
+          background: rgba(15,23,42,.78);
+          border: 1px solid rgba(255,255,255,.10);
+        }
+
+        .floor-stat span {
+          color: #94a3b8;
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .floor-stat strong {
+          display: block;
+          margin-top: 6px;
+          font-size: 28px;
+          font-weight: 1000;
+        }
+
+        .floor-toolbar {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 12px;
+          padding: 14px;
+          border-radius: 25px;
+          background: rgba(15,23,42,.78);
+          border: 1px solid rgba(255,255,255,.10);
+          margin-bottom: 14px;
+        }
+
+        .floor-search {
+          height: 45px;
+          border-radius: 15px;
+          border: 1px solid rgba(255,255,255,.10);
+          background: rgba(255,255,255,.07);
+          color: white;
+          padding: 0 14px;
+          outline: none;
+          font-weight: 800;
+        }
+
+        .floor-filter-row {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+
+        .floor-filter-row button {
+          height: 38px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,.10);
+          background: rgba(255,255,255,.07);
+          color: white;
+          padding: 0 12px;
+          font-weight: 850;
+          cursor: pointer;
+        }
+
+        .floor-filter-row button.active {
+          background: rgba(34,211,238,.20);
+          border-color: rgba(34,211,238,.35);
+        }
+
+        .floor-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(335px, 1fr));
+          gap: 16px;
+        }
+
+        .floor-table-card {
+          position: relative;
+          min-height: 435px;
+          border-radius: 32px;
+          border: 1px solid rgba(255,255,255,.10);
+          background:
+            radial-gradient(circle at 18% 10%, rgba(34,211,238,.09), transparent 34%),
+            radial-gradient(circle at 92% 0%, rgba(168,85,247,.10), transparent 38%),
+            rgba(15,23,42,.88);
+          padding: 15px;
+          overflow: hidden;
+          transition: .22s ease;
+        }
+
+        .floor-table-card:hover {
+          transform: translateY(-6px);
+        }
+
+        .floor-table-card.locked {
+          opacity: .68;
+        }
+
+        .floor-status-pill {
+          position: absolute;
+          top: 14px;
+          right: 14px;
+          z-index: 4;
+          padding: 8px 10px;
+          border-radius: 999px;
+          border: 1px solid;
+          font-size: 12px;
+          font-weight: 950;
+        }
+
+        .floor-table-stage {
+          height: 205px;
+          position: relative;
+          display: grid;
+          place-items: center;
+          margin-top: 22px;
+        }
+
+        .floor-table-core {
+          position: relative;
+          z-index: 3;
+          width: 124px;
+          height: 124px;
+          border-radius: 50%;
+          border: 2px solid rgba(255,255,255,.18);
+          color: white;
+          display: grid;
+          place-items: center;
+          align-content: center;
+          gap: 5px;
+          box-shadow: 0 22px 52px rgba(0,0,0,.34);
+        }
+
+        .floor-table-core.rect {
+          width: 166px;
+          height: 110px;
+          border-radius: 30px;
+        }
+
+        .floor-table-core.booth {
+          width: 178px;
+          height: 106px;
+          border-radius: 32px 32px 18px 18px;
+        }
+
+        .floor-table-core strong {
+          font-size: 28px;
+          font-weight: 1000;
+        }
+
+        .floor-table-core span {
+          color: #cbd5e1;
+          font-size: 12px;
+          font-weight: 850;
+        }
+
+        .floor-chair {
+          position: absolute;
+          width: 36px;
+          height: 36px;
+          border-radius: 14px;
+          background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(203,213,225,.82));
+          box-shadow: 0 9px 18px rgba(0,0,0,.26);
+        }
+
+        .floor-chair.top { top: 7px; left: 50%; transform: translateX(-50%); }
+        .floor-chair.bottom { bottom: 7px; left: 50%; transform: translateX(-50%); }
+        .floor-chair.top-left { top: 20px; left: 68px; }
+        .floor-chair.top-right { top: 20px; right: 68px; }
+        .floor-chair.bottom-left { bottom: 20px; left: 68px; }
+        .floor-chair.bottom-right { bottom: 20px; right: 68px; }
+        .floor-chair.left-top { left: 18px; top: 66px; }
+        .floor-chair.left-bottom { left: 18px; bottom: 66px; }
+        .floor-chair.right-top { right: 18px; top: 66px; }
+        .floor-chair.right-bottom { right: 18px; bottom: 66px; }
+
+        .floor-card-info {
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          align-items: center;
+        }
+
+        .floor-card-info h3 {
+          margin: 0;
+          font-size: 23px;
+        }
+
+        .floor-card-info p {
+          margin: 4px 0 0;
+          color: #94a3b8;
+          font-size: 13px;
+        }
+
+        .floor-capacity {
+          padding: 8px 10px;
+          border-radius: 999px;
+          background: rgba(255,255,255,.08);
+          border: 1px solid rgba(255,255,255,.10);
+          font-size: 12px;
+          font-weight: 900;
+        }
+
+        .floor-info-box {
+          margin-top: 10px;
+          padding: 10px;
+          border-radius: 17px;
+          display: grid;
+          gap: 4px;
+          font-size: 12px;
+          font-weight: 850;
+        }
+
+        .floor-info-box.blue {
+          background: rgba(34,211,238,.08);
+          border: 1px solid rgba(34,211,238,.18);
+          color: #a5f3fc;
+        }
+
+        .floor-info-box.yellow {
+          background: rgba(250,204,21,.08);
+          border: 1px solid rgba(250,204,21,.18);
+          color: #fde68a;
+        }
+
+        .floor-info-box.purple {
+          background: rgba(168,85,247,.08);
+          border: 1px solid rgba(168,85,247,.18);
+          color: #ddd6fe;
+        }
+
+        .floor-quick-row {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 7px;
+          margin-top: 12px;
+        }
+
+        .floor-quick-row button {
+          min-height: 35px;
+          border-radius: 13px;
+          border: 1px solid rgba(255,255,255,.10);
+          background: rgba(255,255,255,.07);
+          color: white;
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 850;
+        }
+
+        .floor-actions {
+          display: grid;
+          grid-template-columns: 1fr 115px;
+          gap: 9px;
+          margin-top: 10px;
+        }
+
+        .floor-open-btn,
+        .floor-edit-btn {
+          height: 43px;
+          border: 0;
+          border-radius: 15px;
+          color: white;
+          cursor: pointer;
+          font-weight: 900;
+        }
+
+        .floor-open-btn {
+          background: linear-gradient(135deg,#06b6d4,#2563eb);
+        }
+
+        .floor-edit-btn {
+          background: rgba(255,255,255,.09);
+          border: 1px solid rgba(255,255,255,.10);
+        }
+
+        .floor-open-btn:disabled {
+          opacity: .45;
+          cursor: not-allowed;
+        }
+
+        .floor-empty {
+          padding: 28px;
+          border-radius: 24px;
+          background: rgba(15,23,42,.78);
+          border: 1px solid rgba(255,255,255,.10);
+          color: #94a3b8;
+          text-align: center;
+        }
+
+        .floor-modal-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 9999;
+          background: rgba(2,6,23,.72);
+          backdrop-filter: blur(10px);
+          display: grid;
+          place-items: center;
+          padding: 18px;
+        }
+
+        .floor-modal {
+          width: min(760px, calc(100vw - 36px));
+          max-height: calc(100vh - 36px);
+          overflow-y: auto;
+          border-radius: 28px;
+          background: #0f172a;
+          border: 1px solid rgba(255,255,255,.12);
+          box-shadow: 0 30px 90px rgba(0,0,0,.45);
+          padding: 18px;
+        }
+
+        .floor-modal-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: start;
+          gap: 12px;
+          margin-bottom: 14px;
+        }
+
+        .floor-modal-head h2 {
+          margin: 0;
+        }
+
+        .floor-modal-head p {
+          margin: 6px 0 0;
+          color: #94a3b8;
+        }
+
+        .floor-icon-btn {
+          width: 46px;
+          height: 46px;
+          border-radius: 16px;
+        }
+
+        .floor-form-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 12px;
+        }
+
+        .floor-field,
+        .floor-form-grid label {
+          display: grid;
+          gap: 8px;
+          margin-bottom: 12px;
+        }
+
+        .floor-field span,
+        .floor-form-grid span {
+          color: #cbd5e1;
+          font-size: 12px;
+          font-weight: 850;
+        }
+
+        .floor-field input,
+        .floor-form-grid input,
+        .floor-form-grid select {
+          height: 45px;
+          border-radius: 15px;
+          border: 1px solid rgba(255,255,255,.10);
+          background: rgba(255,255,255,.07);
+          color: white;
+          padding: 0 13px;
+          outline: none;
+          font-weight: 800;
+        }
+
+        .floor-form-grid option {
+          color: #111827;
+        }
+
+        .floor-modal-actions {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-top: 4px;
+        }
+
+        @media (max-width: 900px) {
+          .floor-stats,
+          .floor-toolbar,
+          .floor-form-grid,
+          .floor-modal-actions {
+            grid-template-columns: 1fr;
+          }
+
+          .floor-filter-row {
+            justify-content: flex-start;
+          }
+
+          .floor-head {
+            display: grid;
+          }
+
+          .floor-head-actions {
+            justify-content: flex-start;
+          }
+        }
+      `}</style>
+
+      <div className="floor-head">
+        <div>
+          <button className="floor-back" onClick={onBack}>Back</button>
+          <h1 className="floor-title">Dine-In Floor Plan</h1>
+          <p className="floor-sub">
+            Premium editable table layout for {session?.tenant?.restaurantName || "restaurant"}.
+          </p>
+        </div>
+
+        <div className="floor-head-actions">
+          <button className="floor-soft-btn" onClick={loadTables}>Refresh</button>
+          <button className="floor-soft-btn" onClick={seedDemoData}>Seed Demo Data</button>
+          <button className="floor-primary-btn" onClick={() => setAddingTable(true)}>+ Add Table</button>
+        </div>
+      </div>
+
+      <div className="floor-stats">
+        <div className="floor-stat"><span>Available</span><strong>{stats.available}</strong></div>
+        <div className="floor-stat"><span>Occupied</span><strong>{stats.occupied}</strong></div>
+        <div className="floor-stat"><span>Reserved</span><strong>{stats.reserved}</strong></div>
+        <div className="floor-stat"><span>Cleaning</span><strong>{stats.cleaning}</strong></div>
+      </div>
+
+      <div className="floor-toolbar">
+        <input
+          className="floor-search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search table, area, reservation, phone, waiter..."
+        />
+
+        <div className="floor-filter-row">
+          {areas.map((area) => (
+            <button key={area} className={activeArea === area ? "active" : ""} onClick={() => setActiveArea(area)}>
+              {area}
+            </button>
+          ))}
+
+          {["all", "available", "occupied", "reserved", "cleaning"].map((status) => (
+            <button key={status} className={statusFilter === status ? "active" : ""} onClick={() => setStatusFilter(status)}>
+              {status === "all" ? "All Status" : statusTone(status).label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="floor-empty">Loading tables...</div>
+      ) : filteredTables.length === 0 ? (
+        <div className="floor-empty">No tables found.</div>
+      ) : (
+        <div className="floor-grid">
+          {filteredTables.map((table) => (
+            <TableCard
+              key={table.id}
+              table={table}
+              allTables={tables}
+              onOpenOrder={onOpenOrder}
+              onEdit={setEditingTable}
+              onStatusChange={updateTableStatus}
+            />
+          ))}
+        </div>
+      )}
+
+      {editingTable ? (
+        <TableFormModal
+          table={editingTable}
+          onClose={() => setEditingTable(null)}
+          onSave={saveTable}
+        />
+      ) : null}
+
+      {addingTable ? (
+        <TableFormModal
+          table={null}
+          onClose={() => setAddingTable(false)}
+          onSave={saveTable}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+
+
+
+
+
+===== tableLayoutRoutes.js =====
+const express = require("express");
+const { v4: uuid } = require("uuid");
+
+const router = express.Router();
+
+function ensureCollections(db) {
+  db.tables = Array.isArray(db.tables) ? db.tables : [];
+  db.auditLogs = Array.isArray(db.auditLogs) ? db.auditLogs : [];
+  return db;
+}
+
+function tenantOnly(req, res, next) {
+  if (!req.user?.tenantId) {
+    return res.status(403).json({
+      message: "Restaurant account access required."
+    });
+  }
+
+  next();
+}
+
+module.exports = function tableLayoutRoutes({ readDb, writeDb }) {
+  router.post("/", tenantOnly, (req, res) => {
+    const {
+      name,
+      floor,
+      shape,
+      chairs,
+      x,
+      y
+    } = req.body;
+
+    if (!name || !floor) {
+      return res.status(400).json({
+        message: "Table name and floor are required."
+      });
+    }
+
+    const db = ensureCollections(readDb());
+
+    const table = {
+      id: uuid(),
+      tenantId: req.user.tenantId,
+      branchId: req.user.branchId || null,
+      name,
+      floor,
+      shape: shape || "rect",
+      chairs: Number(chairs || 4),
+      x: Number(x || 50),
+      y: Number(y || 50),
+      status: "available",
+      timer: "",
+      guests: 0,
+      orderNo: "",
+      staff: "",
+      total: 0,
+      currentOrderIds: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    db.tables.push(table);
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "TABLE_CREATED",
+      actor: req.user.username,
+      details: table,
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.status(201).json({
+      message: "Table created successfully.",
+      table
+    });
+  });
+
+  router.put("/:tableId", tenantOnly, (req, res) => {
+    const { tableId } = req.params;
+
+    const {
+      name,
+      floor,
+      shape,
+      chairs,
+      x,
+      y
+    } = req.body;
+
+    const db = ensureCollections(readDb());
+
+    const table = db.tables.find(
+      (item) => item.id === tableId && item.tenantId === req.user.tenantId
+    );
+
+    if (!table) {
+      return res.status(404).json({
+        message: "Table not found."
+      });
+    }
+
+    table.name = name || table.name;
+    table.floor = floor || table.floor;
+    table.shape = shape || table.shape;
+    table.chairs = chairs !== undefined ? Number(chairs || 0) : table.chairs;
+    table.x = x !== undefined ? Number(x || 0) : table.x;
+    table.y = y !== undefined ? Number(y || 0) : table.y;
+    table.updatedAt = new Date().toISOString();
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "TABLE_UPDATED",
+      actor: req.user.username,
+      details: table,
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: "Table updated successfully.",
+      table
+    });
+  });
+
+  router.delete("/:tableId", tenantOnly, (req, res) => {
+    const { tableId } = req.params;
+
+    const db = ensureCollections(readDb());
+
+    const table = db.tables.find(
+      (item) => item.id === tableId && item.tenantId === req.user.tenantId
+    );
+
+    if (!table) {
+      return res.status(404).json({
+        message: "Table not found."
+      });
+    }
+
+    if (table.status === "occupied") {
+      return res.status(400).json({
+        message: "Occupied table cannot be deleted. Settle or move the order first."
+      });
+    }
+
+    db.tables = db.tables.filter(
+      (item) => !(item.id === tableId && item.tenantId === req.user.tenantId)
+    );
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "TABLE_DELETED",
+      actor: req.user.username,
+      details: {
+        tableId,
+        tableName: table.name
+      },
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: "Table deleted successfully."
+    });
+  });
+
+  router.patch("/:tableId/position", tenantOnly, (req, res) => {
+    const { tableId } = req.params;
+    const { x, y } = req.body;
+
+    const db = ensureCollections(readDb());
+
+    const table = db.tables.find(
+      (item) => item.id === tableId && item.tenantId === req.user.tenantId
+    );
+
+    if (!table) {
+      return res.status(404).json({
+        message: "Table not found."
+      });
+    }
+
+    table.x = Math.max(4, Math.min(96, Number(x || table.x)));
+    table.y = Math.max(4, Math.min(92, Number(y || table.y)));
+    table.updatedAt = new Date().toISOString();
+
+    writeDb(db);
+
+    res.json({
+      message: "Table position updated.",
+      table
+    });
+  });
+
+  return router;
+};
+
+===== tableAdvancedRoutes.js =====
+const express = require("express");
+
+const router = express.Router();
+
+const defaultTables = [
+  { name: "T1", area: "Main Hall", seats: 4, status: "available", shape: "round" },
+  { name: "T2", area: "Main Hall", seats: 4, status: "available", shape: "round" },
+  { name: "T3", area: "Main Hall", seats: 6, status: "available", shape: "rect" },
+  { name: "T4", area: "Main Hall", seats: 2, status: "available", shape: "round" },
+  { name: "T5", area: "VIP Room", seats: 6, status: "reserved", shape: "rect" },
+  { name: "T6", area: "VIP Room", seats: 8, status: "available", shape: "rect" },
+  { name: "T7", area: "Family Zone", seats: 6, status: "available", shape: "rect" },
+  { name: "T8", area: "Family Zone", seats: 4, status: "cleaning", shape: "round" },
+  { name: "T9", area: "Outdoor", seats: 4, status: "available", shape: "round" },
+  { name: "T10", area: "Outdoor", seats: 2, status: "available", shape: "round" },
+  { name: "T11", area: "Outdoor", seats: 6, status: "available", shape: "rect" },
+  { name: "T12", area: "Main Hall", seats: 8, status: "available", shape: "rect" }
+];
+
+const allowedStatuses = ["available", "occupied", "reserved", "cleaning", "merged"];
+
+function ensureCollections(db) {
+  db.tables = Array.isArray(db.tables) ? db.tables : [];
+  db.auditLogs = Array.isArray(db.auditLogs) ? db.auditLogs : [];
+  return db;
+}
+
+function tenantOnly(req, res, next) {
+  if (!req.user?.tenantId) {
+    return res.status(403).json({
+      message: "Restaurant account access required."
+    });
+  }
+
+  next();
+}
+
+function createTenantDefaultTables(db, tenantId) {
+  const existing = db.tables.filter((table) => table.tenantId === tenantId);
+
+  if (existing.length > 0) return existing;
+
+  const now = new Date().toISOString();
+
+  const created = defaultTables.map((table, index) => ({
+    id: `table-${tenantId}-${index + 1}`,
+    tenantId,
+    name: table.name,
+    area: table.area,
+    seats: table.seats,
+    status: table.status,
+    shape: table.shape,
+    waiterName: "",
+    currentOrderNo: "",
+    total: 0,
+    reservationName: table.status === "reserved" ? "VIP Guest" : "",
+    reservationPhone: table.status === "reserved" ? "03000000000" : "",
+    reservationTime: table.status === "reserved" ? "21:00" : "",
+    reservationNote: "",
+    mergedWith: [],
+    mergedMasterId: "",
+    createdAt: now,
+    updatedAt: now
+  }));
+
+  db.tables.push(...created);
+
+  return created;
+}
+
+function normalizeTable(table) {
+  return {
+    ...table,
+    seats: Number(table.seats || table.chairs || table.capacity || 4),
+    mergedWith: Array.isArray(table.mergedWith) ? table.mergedWith : [],
+    mergedMasterId: table.mergedMasterId || "",
+    reservationName: table.reservationName || "",
+    reservationPhone: table.reservationPhone || "",
+    reservationTime: table.reservationTime || "",
+    reservationNote: table.reservationNote || "",
+    waiterName: table.waiterName || "",
+    currentOrderNo: table.currentOrderNo || "",
+    total: Number(table.total || 0)
+  };
+}
+
+module.exports = function tableAdvancedRoutes({ readDb, writeDb }) {
+  router.get("/", tenantOnly, (req, res) => {
+    const db = ensureCollections(readDb());
+
+    const tables = createTenantDefaultTables(db, req.user.tenantId)
+      .map(normalizeTable)
+      .sort((a, b) => {
+        const areaSort = String(a.area || "").localeCompare(String(b.area || ""));
+        if (areaSort !== 0) return areaSort;
+        return String(a.name || "").localeCompare(String(b.name || ""), undefined, { numeric: true });
+      });
+
+    writeDb(db);
+
+    res.json({
+      tables
+    });
+  });
+
+  router.post("/", tenantOnly, (req, res) => {
+    const db = ensureCollections(readDb());
+    const now = new Date().toISOString();
+
+    const table = {
+      id: `table-${req.user.tenantId}-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      name: req.body.name || `T${Date.now()}`,
+      area: req.body.area || "Main Hall",
+      seats: Number(req.body.seats || 4),
+      status: allowedStatuses.includes(req.body.status) ? req.body.status : "available",
+      shape: req.body.shape || (Number(req.body.seats || 4) > 4 ? "rect" : "round"),
+      waiterName: "",
+      currentOrderNo: "",
+      total: 0,
+      reservationName: "",
+      reservationPhone: "",
+      reservationTime: "",
+      reservationNote: "",
+      mergedWith: [],
+      mergedMasterId: "",
+      createdAt: now,
+      updatedAt: now
+    };
+
+    db.tables.push(table);
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "TABLE_CREATED",
+      actor: req.user.username,
+      details: table,
+      createdAt: now
+    });
+
+    writeDb(db);
+
+    res.status(201).json({
+      message: "Table created successfully.",
+      table: normalizeTable(table)
+    });
+  });
+
+  router.patch("/:tableId", tenantOnly, (req, res) => {
+    const db = ensureCollections(readDb());
+    createTenantDefaultTables(db, req.user.tenantId);
+
+    const table = db.tables.find(
+      (item) => item.tenantId === req.user.tenantId && item.id === req.params.tableId
+    );
+
+    if (!table) {
+      return res.status(404).json({
+        message: "Table not found."
+      });
+    }
+
+    const before = { ...table };
+
+    const editableFields = [
+      "name",
+      "area",
+      "seats",
+      "status",
+      "shape",
+      "waiterName",
+      "currentOrderNo",
+      "total",
+      "reservationName",
+      "reservationPhone",
+      "reservationTime",
+      "reservationNote",
+      "mergedWith",
+      "mergedMasterId"
+    ];
+
+    editableFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        table[field] = req.body[field];
+      }
+    });
+
+    table.seats = Number(table.seats || 4);
+    table.total = Number(table.total || 0);
+    table.mergedWith = Array.isArray(table.mergedWith) ? table.mergedWith : [];
+    table.mergedMasterId = table.mergedMasterId || "";
+
+    if (!allowedStatuses.includes(table.status)) {
+      table.status = "available";
+    }
+
+    if (table.status === "available") {
+      table.reservationName = table.reservationName || "";
+      table.reservationPhone = table.reservationPhone || "";
+      table.reservationTime = table.reservationTime || "";
+      table.reservationNote = table.reservationNote || "";
+    }
+
+    table.updatedAt = new Date().toISOString();
+    table.updatedBy = req.user.username;
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "TABLE_UPDATED",
+      actor: req.user.username,
+      details: {
+        tableId: table.id,
+        tableName: table.name,
+        before,
+        after: table
+      },
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: "Table updated successfully.",
+      table: normalizeTable(table)
+    });
+  });
+
+  router.post("/move", tenantOnly, (req, res) => {
+    const { sourceTableId, targetTableId } = req.body;
+
+    if (!sourceTableId || !targetTableId) {
+      return res.status(400).json({
+        message: "Source and target table are required."
+      });
+    }
+
+    const db = ensureCollections(readDb());
+    createTenantDefaultTables(db, req.user.tenantId);
+
+    const source = db.tables.find(
+      (table) => table.tenantId === req.user.tenantId && table.id === sourceTableId
+    );
+    const target = db.tables.find(
+      (table) => table.tenantId === req.user.tenantId && table.id === targetTableId
+    );
+
+    if (!source || !target) {
+      return res.status(404).json({
+        message: "Source or target table not found."
+      });
+    }
+
+    const sourceBefore = { ...source };
+    const targetBefore = { ...target };
+
+    target.status = source.status;
+    target.waiterName = source.waiterName || "";
+    target.currentOrderNo = source.currentOrderNo || "";
+    target.total = Number(source.total || 0);
+    target.reservationName = source.reservationName || "";
+    target.reservationPhone = source.reservationPhone || "";
+    target.reservationTime = source.reservationTime || "";
+    target.reservationNote = source.reservationNote || "";
+    target.updatedAt = new Date().toISOString();
+    target.updatedBy = req.user.username;
+
+    source.status = "available";
+    source.waiterName = "";
+    source.currentOrderNo = "";
+    source.total = 0;
+    source.reservationName = "";
+    source.reservationPhone = "";
+    source.reservationTime = "";
+    source.reservationNote = "";
+    source.mergedWith = [];
+    source.mergedMasterId = "";
+    source.updatedAt = new Date().toISOString();
+    source.updatedBy = req.user.username;
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "TABLE_MOVED",
+      actor: req.user.username,
+      details: {
+        sourceBefore,
+        targetBefore,
+        sourceAfter: source,
+        targetAfter: target
+      },
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: "Table moved successfully.",
+      source: normalizeTable(source),
+      target: normalizeTable(target)
+    });
+  });
+
+  router.post("/merge", tenantOnly, (req, res) => {
+    const { masterTableId, targetTableId } = req.body;
+
+    if (!masterTableId || !targetTableId) {
+      return res.status(400).json({
+        message: "Master and target table are required."
+      });
+    }
+
+    const db = ensureCollections(readDb());
+    createTenantDefaultTables(db, req.user.tenantId);
+
+    const master = db.tables.find(
+      (table) => table.tenantId === req.user.tenantId && table.id === masterTableId
+    );
+    const target = db.tables.find(
+      (table) => table.tenantId === req.user.tenantId && table.id === targetTableId
+    );
+
+    if (!master || !target) {
+      return res.status(404).json({
+        message: "Master or target table not found."
+      });
+    }
+
+    master.mergedWith = Array.isArray(master.mergedWith) ? master.mergedWith : [];
+
+    if (!master.mergedWith.includes(target.id)) {
+      master.mergedWith.push(target.id);
+    }
+
+    if (master.status === "available") {
+      master.status = "occupied";
+    }
+
+    master.updatedAt = new Date().toISOString();
+    master.updatedBy = req.user.username;
+
+    target.status = "merged";
+    target.mergedMasterId = master.id;
+    target.updatedAt = new Date().toISOString();
+    target.updatedBy = req.user.username;
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "TABLES_MERGED",
+      actor: req.user.username,
+      details: {
+        masterTableId: master.id,
+        targetTableId: target.id
+      },
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: "Tables merged successfully.",
+      master: normalizeTable(master),
+      target: normalizeTable(target)
+    });
+  });
+
+  router.post("/unmerge", tenantOnly, (req, res) => {
+    const { tableId } = req.body;
+
+    if (!tableId) {
+      return res.status(400).json({
+        message: "Table ID is required."
+      });
+    }
+
+    const db = ensureCollections(readDb());
+    createTenantDefaultTables(db, req.user.tenantId);
+
+    const table = db.tables.find(
+      (item) => item.tenantId === req.user.tenantId && item.id === tableId
+    );
+
+    if (!table) {
+      return res.status(404).json({
+        message: "Table not found."
+      });
+    }
+
+    const affected = [];
+
+    if (table.mergedMasterId) {
+      const master = db.tables.find(
+        (item) => item.tenantId === req.user.tenantId && item.id === table.mergedMasterId
+      );
+
+      if (master) {
+        master.mergedWith = (master.mergedWith || []).filter((id) => id !== table.id);
+        master.updatedAt = new Date().toISOString();
+        master.updatedBy = req.user.username;
+        affected.push(master);
+      }
+
+      table.mergedMasterId = "";
+      table.status = "available";
+      table.updatedAt = new Date().toISOString();
+      table.updatedBy = req.user.username;
+      affected.push(table);
+    } else {
+      const childIds = Array.isArray(table.mergedWith) ? table.mergedWith : [];
+      table.mergedWith = [];
+      table.updatedAt = new Date().toISOString();
+      table.updatedBy = req.user.username;
+      affected.push(table);
+
+      db.tables.forEach((item) => {
+        if (item.tenantId === req.user.tenantId && childIds.includes(item.id)) {
+          item.mergedMasterId = "";
+          item.status = "available";
+          item.updatedAt = new Date().toISOString();
+          item.updatedBy = req.user.username;
+          affected.push(item);
+        }
+      });
+    }
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "TABLES_UNMERGED",
+      actor: req.user.username,
+      details: {
+        tableId,
+        affectedTableIds: affected.map((item) => item.id)
+      },
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: "Tables unmerged successfully.",
+      tables: affected.map(normalizeTable)
+    });
+  });
+
+  return router;
+};
+
+===== tableActionRoutes.js =====
+const express = require("express");
+
+const router = express.Router();
+
+function ensureCollections(db) {
+  db.tables = Array.isArray(db.tables) ? db.tables : [];
+  db.orders = Array.isArray(db.orders) ? db.orders : [];
+  db.auditLogs = Array.isArray(db.auditLogs) ? db.auditLogs : [];
+  return db;
+}
+
+function tenantOnly(req, res, next) {
+  if (!req.user?.tenantId) {
+    return res.status(403).json({
+      message: "Restaurant account access required."
+    });
+  }
+
+  next();
+}
+
+function clearTable(table) {
+  table.status = "available";
+  table.timer = "";
+  table.guests = 0;
+  table.orderNo = "";
+  table.staff = "";
+  table.total = 0;
+  table.currentOrderIds = [];
+  table.updatedAt = new Date().toISOString();
+}
+
+function updateOrdersToTable(db, tenantId, orderIds, targetTable) {
+  db.orders = db.orders.map((order) => {
+    if (
+      order.tenantId === tenantId &&
+      Array.isArray(orderIds) &&
+      orderIds.includes(order.id)
+    ) {
+      return {
+        ...order,
+        tableId: targetTable.id,
+        tableName: targetTable.name,
+        table: {
+          ...(order.table || {}),
+          id: targetTable.id,
+          name: targetTable.name,
+          floor: targetTable.floor
+        },
+        updatedAt: new Date().toISOString()
+      };
+    }
+
+    return order;
+  });
+}
+
+module.exports = function tableActionRoutes({ readDb, writeDb }) {
+  router.post("/move", tenantOnly, (req, res) => {
+    const { fromTableId, toTableId } = req.body;
+
+    if (!fromTableId || !toTableId) {
+      return res.status(400).json({
+        message: "From table and target table are required."
+      });
+    }
+
+    if (fromTableId === toTableId) {
+      return res.status(400).json({
+        message: "You cannot move table to itself."
+      });
+    }
+
+    const db = ensureCollections(readDb());
+
+    const fromTable = db.tables.find(
+      (table) => table.id === fromTableId && table.tenantId === req.user.tenantId
+    );
+
+    const toTable = db.tables.find(
+      (table) => table.id === toTableId && table.tenantId === req.user.tenantId
+    );
+
+    if (!fromTable || !toTable) {
+      return res.status(404).json({
+        message: "Table not found."
+      });
+    }
+
+    if (fromTable.status !== "occupied") {
+      return res.status(400).json({
+        message: "Only occupied table can be moved."
+      });
+    }
+
+    if (toTable.status === "occupied") {
+      return res.status(400).json({
+        message: "Target table is occupied. Use Merge instead."
+      });
+    }
+
+    const movingOrderIds = Array.isArray(fromTable.currentOrderIds)
+      ? [...fromTable.currentOrderIds]
+      : [];
+
+    toTable.status = "occupied";
+    toTable.timer = fromTable.timer || "00:00:01";
+    toTable.guests = Number(fromTable.guests || 0);
+    toTable.orderNo = fromTable.orderNo || "";
+    toTable.staff = fromTable.staff || "";
+    toTable.total = Number(fromTable.total || 0);
+    toTable.currentOrderIds = movingOrderIds;
+    toTable.updatedAt = new Date().toISOString();
+
+    updateOrdersToTable(db, req.user.tenantId, movingOrderIds, toTable);
+
+    clearTable(fromTable);
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      action: "TABLE_MOVED",
+      actor: req.user.username,
+      tenantId: req.user.tenantId,
+      details: {
+        fromTableId,
+        fromTableName: fromTable.name,
+        toTableId,
+        toTableName: toTable.name,
+        orderIds: movingOrderIds
+      },
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: `Table ${fromTable.name} moved to table ${toTable.name}.`,
+      fromTable,
+      toTable
+    });
+  });
+
+  router.post("/merge", tenantOnly, (req, res) => {
+    const { sourceTableId, targetTableId } = req.body;
+
+    if (!sourceTableId || !targetTableId) {
+      return res.status(400).json({
+        message: "Source table and target table are required."
+      });
+    }
+
+    if (sourceTableId === targetTableId) {
+      return res.status(400).json({
+        message: "You cannot merge table with itself."
+      });
+    }
+
+    const db = ensureCollections(readDb());
+
+    const sourceTable = db.tables.find(
+      (table) => table.id === sourceTableId && table.tenantId === req.user.tenantId
+    );
+
+    const targetTable = db.tables.find(
+      (table) => table.id === targetTableId && table.tenantId === req.user.tenantId
+    );
+
+    if (!sourceTable || !targetTable) {
+      return res.status(404).json({
+        message: "Table not found."
+      });
+    }
+
+    if (sourceTable.status !== "occupied") {
+      return res.status(400).json({
+        message: "Source table must be occupied."
+      });
+    }
+
+    if (targetTable.status !== "occupied") {
+      return res.status(400).json({
+        message: "Target table must be occupied for merge. Use Move for empty table."
+      });
+    }
+
+    const sourceOrderIds = Array.isArray(sourceTable.currentOrderIds)
+      ? sourceTable.currentOrderIds
+      : [];
+
+    const targetOrderIds = Array.isArray(targetTable.currentOrderIds)
+      ? targetTable.currentOrderIds
+      : [];
+
+    const mergedOrderIds = [...new Set([...targetOrderIds, ...sourceOrderIds])];
+
+    targetTable.guests = Number(targetTable.guests || 0) + Number(sourceTable.guests || 0);
+    targetTable.total = Number(targetTable.total || 0) + Number(sourceTable.total || 0);
+    targetTable.currentOrderIds = mergedOrderIds;
+    targetTable.orderNo = targetTable.orderNo || sourceTable.orderNo || "";
+    targetTable.staff = targetTable.staff || sourceTable.staff || "";
+    targetTable.status = "occupied";
+    targetTable.updatedAt = new Date().toISOString();
+
+    updateOrdersToTable(db, req.user.tenantId, sourceOrderIds, targetTable);
+
+    clearTable(sourceTable);
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      action: "TABLE_MERGED",
+      actor: req.user.username,
+      tenantId: req.user.tenantId,
+      details: {
+        sourceTableId,
+        sourceTableName: sourceTable.name,
+        targetTableId,
+        targetTableName: targetTable.name,
+        mergedOrderIds
+      },
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: `Table ${sourceTable.name} merged into table ${targetTable.name}.`,
+      sourceTable,
+      targetTable
+    });
+  });
+
+  return router;
+};
+
+===== server.js table route mounts =====
+
+backend\src\server.js:6:const tableAdvancedRoutes = require("./routes/tableAdvancedRoutes");
+backend\src\server.js:20:const tableActionRoutes = require("./routes/tableActionRoutes");
+backend\src\server.js:21:const tableLayoutRoutes = require("./routes/tableLayoutRoutes");
+backend\src\server.js:40:app.use("/api/table-actions", requireAuth, tableActionRoutes({ readDb, writeDb }));
+backend\src\server.js:41:app.use("/api/table-layout", requireAuth, tableLayoutRoutes({ readDb, writeDb }));
+backend\src\server.js:127:  db.tables = Array.isArray(db.tables) ? db.tables : [];
+backend\src\server.js:162:function defaultTablesForTenant(tenantId, branchId) {
+backend\src\server.js:173:function ensureTenantTables(db, tenantId, branchId) {
+backend\src\server.js:174:  const existing = db.tables.filter((table) => table.tenantId === tenantId);
+backend\src\server.js:177:  const createdTables = defaultTablesForTenant(tenantId, branchId);
+backend\src\server.js:178:  db.tables.push(...createdTables);
+backend\src\server.js:179:  return createdTables;
+backend\src\server.js:408:    ensureTenantTables(db, tenant.id, user.branchId || null);
+backend\src\server.js:454:  ensureTenantTables(db, tenant.id, user.branchId || null);
+backend\src\server.js:478:    tablesCount: db.tables.filter((table) => table.tenantId === tenant.id).length,
+backend\src\server.js:571:    ensureTenantTables(db, tenantId, branchId);
+backend\src\server.js:616:  ensureTenantTables(db, req.user.tenantId, req.user.branchId || null);
+backend\src\server.js:621:  const tenantTables = db.tables.filter((table) => table.tenantId === tenant.id);
+backend\src\server.js:636:      activeTables: tenantTables.filter((table) => table.status === "occupied").length,
+backend\src\server.js:1070:app.get("/api/tables", requireAuth, tenantOnly, (req, res) => {
+backend\src\server.js:1072:  const tables = ensureTenantTables(db, req.user.tenantId, req.user.branchId || null);
+backend\src\server.js:1074:  res.json(tables);
+backend\src\server.js:1077:app.patch("/api/tables/:tableId/start", requireAuth, tenantOnly, (req, res) => {
+backend\src\server.js:1078:  const { tableId } = req.params;
+backend\src\server.js:1082:  const table = db.tables.find((item) => item.id === tableId && item.tenantId === 
+req.user.tenantId);
+backend\src\server.js:1083:  if (!table) return res.status(404).json({ message: "Table not found." });
+backend\src\server.js:1085:  table.status = "occupied";
+backend\src\server.js:1086:  table.timer = table.timer || "00:00:01";
+backend\src\server.js:1087:  table.guests = Number(guests || table.guests || 2);
+backend\src\server.js:1088:  table.staff = staff || table.staff || req.user.username || "Staff";
+backend\src\server.js:1089:  table.orderNo = table.orderNo || getNextOrderNumber(db, req.user.tenantId);
+backend\src\server.js:1090:  table.total = Number(table.total || 0);
+backend\src\server.js:1091:  table.currentOrderIds = Array.isArray(table.currentOrderIds) ? table.currentOrderIds : [];
+backend\src\server.js:1092:  table.updatedAt = new Date().toISOString();
+backend\src\server.js:1095:  res.json({ message: "Table started.", table });
+backend\src\server.js:1098:app.patch("/api/tables/:tableId/settle", requireAuth, tenantOnly, (req, res) => {
+backend\src\server.js:1099:  const { tableId } = req.params;
+backend\src\server.js:1103:  const table = db.tables.find((item) => item.id === tableId && item.tenantId === 
+req.user.tenantId);
+backend\src\server.js:1104:  if (!table) return res.status(404).json({ message: "Table not found." });
+backend\src\server.js:1109:    if (Array.isArray(table.currentOrderIds) && table.currentOrderIds.includes(order.id)) {
+backend\src\server.js:1124:    type: "table_settlement",
+backend\src\server.js:1127:    tableId: table.id,
+backend\src\server.js:1128:    tableName: table.name,
+backend\src\server.js:1129:    orderNo: table.orderNo,
+backend\src\server.js:1131:    paidAmount: Number(paidAmount || table.total || 0),
+backend\src\server.js:1137:    action: "TABLE_SETTLED",
+backend\src\server.js:1143:  table.status = "available";
+backend\src\server.js:1144:  table.timer = "";
+backend\src\server.js:1145:  table.guests = 0;
+backend\src\server.js:1146:  table.orderNo = "";
+backend\src\server.js:1147:  table.staff = "";
+backend\src\server.js:1148:  table.total = 0;
+backend\src\server.js:1149:  table.currentOrderIds = [];
+backend\src\server.js:1150:  table.updatedAt = now;
+backend\src\server.js:1154:  res.json({ message: "Table settled successfully.", table, receipt });
+backend\src\server.js:1157:app.patch("/api/tables/:tableId/clear", requireAuth, tenantOnly, (req, res) => {
+backend\src\server.js:1158:  const { tableId } = req.params;
+backend\src\server.js:1161:  const table = db.tables.find((item) => item.id === tableId && item.tenantId === 
+req.user.tenantId);
+backend\src\server.js:1162:  if (!table) return res.status(404).json({ message: "Table not found." });
+backend\src\server.js:1164:  table.status = "available";
+backend\src\server.js:1165:  table.timer = "";
+backend\src\server.js:1166:  table.guests = 0;
+backend\src\server.js:1167:  table.orderNo = "";
+backend\src\server.js:1168:  table.staff = "";
+backend\src\server.js:1169:  table.total = 0;
+backend\src\server.js:1170:  table.currentOrderIds = [];
+backend\src\server.js:1171:  table.updatedAt = new Date().toISOString();
+backend\src\server.js:1174:  res.json({ message: "Table cleared.", table });
+backend\src\server.js:1181:      table,
+backend\src\server.js:1214:      table: table || null,
+backend\src\server.js:1215:      tableId: table?.id || null,
+backend\src\server.js:1216:      tableName: table?.name || "",
+backend\src\server.js:1261:    if (mode === "dine_in" && table?.id) {
+backend\src\server.js:1262:      const dineTable = db.tables.find((item) => item.id === table.id && item.tenantId === 
+req.user.tenantId);
+backend\src\server.js:1264:      if (dineTable) {
+backend\src\server.js:1265:        dineTable.status = "occupied";
+backend\src\server.js:1266:        dineTable.timer = dineTable.timer || "00:00:01";
+backend\src\server.js:1267:        dineTable.guests = Number(dineTable.guests || table.guests || 2);
+backend\src\server.js:1268:        dineTable.orderNo = dineTable.orderNo || orderNo;
+backend\src\server.js:1269:        dineTable.staff = dineTable.staff || req.user.username || "Staff";
+backend\src\server.js:1270:        dineTable.total = Number(dineTable.total || 0) + Number(total || 0);
+backend\src\server.js:1271:        dineTable.currentOrderIds = Array.isArray(dineTable.currentOrderIds)
+backend\src\server.js:1272:          ? [...dineTable.currentOrderIds, order.id]
+backend\src\server.js:1274:        dineTable.updatedAt = new Date().toISOString();
+backend\src\server.js:1402:app.use("/api/tables", requireAuth, tableAdvancedRoutes({ readDb, writeDb }));
+
+
+

@@ -18,7 +18,7 @@ function tenantOnly(req, res, next) {
   next();
 }
 
-function allowedStatus(value, fallback) {
+function normalizeCompletedStatus(value, fallback) {
   const allowed = [
     "unconfirmed",
     "placed",
@@ -32,7 +32,17 @@ function allowedStatus(value, fallback) {
   ];
 
   if (!value) return fallback;
-  return allowed.includes(value) ? value : fallback;
+
+  const clean = String(value).trim().toLowerCase();
+
+  if (!allowed.includes(clean)) return fallback;
+
+  // Business rule:
+  // In NexaPOS Pro, "served" means the restaurant flow is finished.
+  // So when a user selects Served, save it as Completed everywhere.
+  if (clean === "served") return "completed";
+
+  return clean;
 }
 
 module.exports = function orderStatusRoutes({ readDb, writeDb }) {
@@ -70,8 +80,8 @@ module.exports = function orderStatusRoutes({ readDb, writeDb }) {
       paymentStatus: order.paymentStatus || ""
     };
 
-    order.kitchenStatus = allowedStatus(kitchenStatus, order.kitchenStatus || "placed");
-    order.orderStatus = allowedStatus(orderStatus, order.orderStatus || "placed");
+    order.kitchenStatus = normalizeCompletedStatus(kitchenStatus, order.kitchenStatus || "placed");
+    order.orderStatus = normalizeCompletedStatus(orderStatus, order.orderStatus || "placed");
 
     if (paymentStatus) {
       const allowedPayment = ["paid", "unpaid", "complimentary", "cancelled"];
@@ -147,8 +157,8 @@ module.exports = function orderStatusRoutes({ readDb, writeDb }) {
       paymentStatus: order.paymentStatus || ""
     };
 
-    order.kitchenStatus = allowedStatus(kitchenStatus, order.kitchenStatus || "placed");
-    order.orderStatus = allowedStatus(orderStatus, order.orderStatus || "placed");
+    order.kitchenStatus = normalizeCompletedStatus(kitchenStatus, order.kitchenStatus || "placed");
+    order.orderStatus = normalizeCompletedStatus(orderStatus, order.orderStatus || "placed");
 
     if (paymentStatus) {
       const allowedPayment = ["paid", "unpaid", "complimentary", "cancelled"];
