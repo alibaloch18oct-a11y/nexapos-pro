@@ -1,0 +1,111 @@
+===== backend/src/db.js =====
+const fs = require("fs");
+const path = require("path");
+
+const DB_PATH = path.join(__dirname, "..", "data", "db.json");
+
+function ensureDbFile() {
+  if (!fs.existsSync(DB_PATH)) {
+    const initialData = {
+      tenants: [],
+      users: [],
+      branches: [],
+      modules: [],
+      orders: [],
+      menuItems: [],
+      tables: [],
+      auditLogs: []
+    };
+
+    fs.writeFileSync(DB_PATH, JSON.stringify(initialData, null, 2));
+  }
+}
+
+function readDb() {
+  ensureDbFile();
+
+  const raw = fs.readFileSync(DB_PATH, "utf-8");
+
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    console.error("Database JSON is corrupted:", error);
+    throw new Error("Database file is corrupted.");
+  }
+}
+
+function writeDb(data) {
+  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+  return data;
+}
+
+function logAudit(action, actor, details = {}) {
+  const db = readDb();
+
+  db.auditLogs.push({
+    id: cryptoRandomId(),
+    action,
+    actor,
+    details,
+    createdAt: new Date().toISOString()
+  });
+
+  writeDb(db);
+}
+
+function cryptoRandomId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+module.exports = {
+  readDb,
+  writeDb,
+  logAudit
+};
+
+===== backend/package.json =====
+{
+  "name": "nexapos-pro-backend",
+  "version": "1.0.0",
+  "description": "NexaPOS Pro Backend - Multi Tenant POS System",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js"
+  },
+  "keywords": [
+    "pos",
+    "restaurant",
+    "saas",
+    "multi-tenant"
+  ],
+  "author": "Shazee",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.21.0",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
+
+
+===== backend/data files =====
+
+
+    Directory: D:\ShazeeProjects\nexapos-pro\backend\data
+
+
+Mode                 LastWriteTime         Length Name                                                                                                                                      
+----                 -------------         ------ ----                                                                                                                                      
+-a----         5/25/2026   2:01 PM         175453 db.backup-before-supabase.json                                                                                                            
+-a----         5/25/2026   2:01 PM         175453 db.json                                                                                                                                   
+
+
+
