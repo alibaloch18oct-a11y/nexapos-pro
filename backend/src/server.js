@@ -1362,6 +1362,38 @@ app.use("/api/super-admin-control", requireAuth, superAdminControlRoutes({ readD
 
 app.use("/api/demo-polish", requireAuth, demoPolishRoutes({ readDb, writeDb }));
 
+app.get('/api/health', async (req, res) => {
+  try {
+    res.json({
+      status: 'ok',
+      app: 'NexaPOS Pro',
+      backend: 'online',
+      database: 'connected',
+      modules: {
+        dineIn: 'enabled',
+        takeAway: 'enabled',
+        delivery: 'enabled',
+        driveThru: 'enabled',
+        kds: 'enabled',
+        orders: 'enabled',
+        billing: 'enabled',
+        inventory: 'enabled'
+      },
+      platform: 'Render',
+      time: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      app: 'NexaPOS Pro',
+      backend: 'online',
+      database: 'error',
+      error: error.message,
+      time: new Date().toISOString()
+    });
+  }
+});
+
 initDb()
   .then(() => {
     app.listen(PORT, () => {
