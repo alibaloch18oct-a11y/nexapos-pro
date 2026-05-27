@@ -1,0 +1,110 @@
+config:
+  target: "http://localhost:5000"
+  phases:
+    - duration: 60
+      arrivalRate: 2
+      name: "Warm up - 2 users per second"
+
+    - duration: 120
+      arrivalRate: 5
+      name: "Normal restaurant load - 5 users per second"
+
+    - duration: 120
+      arrivalRate: 10
+      name: "Busy time load - 10 users per second"
+
+    - duration: 60
+      arrivalRate: 20
+      name: "Heavy stress - 20 users per second"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+scenarios:
+  - name: "NexaPOS real order + KDS flow"
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            username: "demo"
+            password: "demo123"
+          capture:
+            - json: "$.token"
+              as: "token"
+
+      - get:
+          url: "/api/client/dashboard"
+          headers:
+            Authorization: "Bearer {{ token }}"
+
+      - get:
+          url: "/api/menu"
+          headers:
+            Authorization: "Bearer {{ token }}"
+
+      - get:
+          url: "/api/staff/active"
+          headers:
+            Authorization: "Bearer {{ token }}"
+
+      - post:
+          url: "/api/orders"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          json:
+            mode: "delivery"
+            items:
+              - id: "stress-zinger"
+                name: "Stress Test Zinger Burger"
+                category: "Burgers"
+                price: 650
+                qty: 1
+                quantity: 1
+            customer:
+              firstName: "Stress"
+              lastName: "Customer"
+              email: ""
+              instructions: "Stress test order"
+              address: "Stress Test Street Hyderabad"
+            phone: "03001234567"
+            deliveryAddress: "Stress Test Street Hyderabad"
+            staff:
+              rider:
+                id: "stress-rider"
+                name: "Stress Rider"
+            riderId: "stress-rider"
+            riderName: "Stress Rider"
+            subtotal: 650
+            tax: 33
+            total: 683
+            originalTotal: 683
+            discountAmount: 0
+            systemDiscountAmount: 0
+            loyaltyRedeemedPoints: 0
+            loyaltyRedeemedAmount: 0
+            discountsApplied: []
+            couponCode: ""
+            taxName: "GST"
+            taxPercent: 5
+            serviceChargeName: "Service Charges"
+            serviceChargePercent: 0
+            serviceChargeAmount: 0
+            currency: "Rs"
+            paymentMethod: "Cash on Delivery"
+            paymentStatus: "unpaid"
+            orderStatus: "placed"
+            kitchenStatus: "placed"
+            orderInstructions: "Stress test delivery order"
+            createdAt: "{{ $isoTimestamp }}"
+
+      - get:
+          url: "/api/kds-auto/board"
+          headers:
+            Authorization: "Bearer {{ token }}"
+
+      - get:
+          url: "/api/orders"
+          headers:
+            Authorization: "Bearer {{ token }}"
+
