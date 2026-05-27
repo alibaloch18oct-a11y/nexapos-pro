@@ -26,13 +26,6 @@ const allowedStatuses = [
   "cash_received"
 ];
 
-function ensureCollections(db) {
-  db.orders = Array.isArray(db.orders) ? db.orders : [];
-  db.kdsSettings = Array.isArray(db.kdsSettings) ? db.kdsSettings : [];
-  db.auditLogs = Array.isArray(db.auditLogs) ? db.auditLogs : [];
-  return db;
-}
-
 function tenantOnly(req, res, next) {
   if (!req.user?.tenantId) {
     return res.status(403).json({
@@ -41,27 +34,6 @@ function tenantOnly(req, res, next) {
   }
 
   next();
-}
-
-function getTenantSettings(db, tenantId) {
-  let settings = db.kdsSettings.find((item) => item.tenantId === tenantId);
-
-  if (!settings) {
-    settings = {
-      id: `kds-settings-${tenantId}`,
-      tenantId,
-      ...defaultKdsSettings,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    db.kdsSettings.push(settings);
-  }
-
-  return {
-    ...defaultKdsSettings,
-    ...settings
-  };
 }
 
 function normalizeStatus(order) {
@@ -129,9 +101,11 @@ function nextStatusFor(order) {
 
 function setOrderStatus(order, nextStatus, actor = "system-auto-timer", changedAt = new Date().toISOString()) {
   order.kitchenStatus = nextStatus;
+
   if (order.mode === "delivery") {
     order.delivery = { ...(order.delivery || {}), dispatchStatus: nextStatus };
   }
+
   order.kitchenStatusChangedAt = changedAt;
   order.kitchenStatusChangedBy = actor;
   order.updatedAt = new Date().toISOString();
@@ -230,161 +204,165 @@ function attachTimerMeta(order, settings) {
   return order;
 }
 
-module.exports = function kdsAutoRoutes({ readDb, writeDb }) {
-  router.get("/settings", tenantOnly, (req, res) => {
-    const db = ensureCollections(readDb());
-    const settings = getTenantSettings(db, req.user.tenantId);
-
-    writeDb(db);
-
-    res.json({ settings });
-  });
-
-  router.patch("/settings", tenantOnly, (req, res) => {
-    const db = ensureCollections(readDb());
-    const settings = getTenantSettings(db, req.user.tenantId);
-
-    const numericKeys = [
-      "newToPreparingMinutes",
-      "preparingToReadyMinutes",
-      "readyToRiderPickedMinutes",
-      "riderPickedToOnWayMinutes",
-      "riderOnWayToDeliveredMinutes",
-      "deliveredToCashReceivedMinutes"
-    ];
-
-    if (typeof req.body.autoEnabled === "boolean") {
-      settings.autoEnabled = req.body.autoEnabled;
+module.exports = function kdsAutoRoutes({
+  getKitchenOrdersForTenant,
+  getKdsSettingsRecord,
+  saveKdsSettingsRecord,
+  saveOrderRecord,
+  findOrderForTenant,
+  addAuditLog
+}) {
+  router.get("/settings", tenantOnly, async (req, res) => {
+    try {
+      const settings = await getKdsSettingsRecord(req.user.tenantId, defaultKdsSettings);
+      res.json({ settings });
+    } catch (error) {
+      console.error("KDS settings load error:", error);
+      res.status(500).json({ message: "Failed to load KDS settings." });
     }
-
-    numericKeys.forEach((key) => {
-      if (req.body[key] !== undefined) {
-        settings[key] = Math.max(1, Number(req.body[key] || defaultKdsSettings[key]));
-      }
-    });
-
-    settings.updatedAt = new Date().toISOString();
-    settings.updatedBy = req.user.username;
-
-    db.auditLogs.push({
-      id: `audit-${Date.now()}`,
-      tenantId: req.user.tenantId,
-      action: "KDS_SETTINGS_UPDATED",
-      actor: req.user.username,
-      details: settings,
-      createdAt: new Date().toISOString()
-    });
-
-    writeDb(db);
-
-    res.json({
-      message: "KDS timer settings updated.",
-      settings
-    });
   });
 
-  router.get("/board", tenantOnly, (req, res) => {
-    const db = ensureCollections(readDb());
-    const settings = getTenantSettings(db, req.user.tenantId);
+  router.patch("/settings", tenantOnly, async (req, res) => {
+    try {
+      const settings = await getKdsSettingsRecord(req.user.tenantId, defaultKdsSettings);
 
-    let changed = false;
+      const numericKeys = [
+        "newToPreparingMinutes",
+        "preparingToReadyMinutes",
+        "readyToRiderPickedMinutes",
+        "riderPickedToOnWayMinutes",
+        "riderOnWayToDeliveredMinutes",
+        "deliveredToCashReceivedMinutes"
+      ];
 
-    const tenantOrders = db.orders.filter(
-      (order) => order.tenantId === req.user.tenantId && visibleKitchenOrder(order)
-    );
+      if (typeof req.body.autoEnabled === "boolean") {
+        settings.autoEnabled = req.body.autoEnabled;
+      }
 
-    tenantOrders.forEach((order) => {
-      const beforeStatus = normalizeStatus(order);
+      numericKeys.forEach((key) => {
+        if (req.body[key] !== undefined) {
+          settings[key] = Math.max(1, Number(req.body[key] || defaultKdsSettings[key]));
+        }
+      });
 
-      ensureKitchenClock(order);
+      settings.updatedAt = new Date().toISOString();
+      settings.updatedBy = req.user.username;
 
-      const progressed = autoProgressOrder(order, settings);
+      const savedSettings = await saveKdsSettingsRecord(req.user.tenantId, settings);
 
-      if (progressed.length > 0 || beforeStatus !== normalizeStatus(order)) {
-        changed = true;
+      await addAuditLog({
+        tenantId: req.user.tenantId,
+        action: "KDS_SETTINGS_UPDATED",
+        actor: req.user.username,
+        details: savedSettings
+      });
 
-        db.auditLogs.push({
-          id: `audit-${Date.now()}-${order.id || order.orderNo}`,
-          tenantId: req.user.tenantId,
-          action: "KDS_AUTO_STATUS_PROGRESS",
-          actor: "system-auto-timer",
-          details: {
-            orderId: order.id,
-            orderNo: order.orderNo,
-            progressed
-          },
-          createdAt: new Date().toISOString()
+      res.json({
+        message: "KDS timer settings updated.",
+        settings: savedSettings
+      });
+    } catch (error) {
+      console.error("KDS settings update error:", error);
+      res.status(500).json({ message: "Failed to update KDS settings." });
+    }
+  });
+
+  router.get("/board", tenantOnly, async (req, res) => {
+    try {
+      const settings = await getKdsSettingsRecord(req.user.tenantId, defaultKdsSettings);
+      const tenantOrders = (await getKitchenOrdersForTenant(req.user.tenantId)).filter(visibleKitchenOrder);
+
+      const changedOrders = [];
+      const auditLogs = [];
+
+      for (const order of tenantOrders) {
+        const beforeStatus = normalizeStatus(order);
+
+        ensureKitchenClock(order);
+
+        const progressed = autoProgressOrder(order, settings);
+
+        if (progressed.length > 0 || beforeStatus !== normalizeStatus(order)) {
+          changedOrders.push(order);
+
+          auditLogs.push({
+            tenantId: req.user.tenantId,
+            action: "KDS_AUTO_STATUS_PROGRESS",
+            actor: "system-auto-timer",
+            details: {
+              orderId: order.id,
+              orderNo: order.orderNo,
+              progressed
+            }
+          });
+        }
+
+        attachTimerMeta(order, settings);
+      }
+
+      await Promise.all(changedOrders.map((order) => saveOrderRecord(order)));
+      await Promise.all(auditLogs.map((log) => addAuditLog(log)));
+
+      const orders = tenantOrders.sort(
+        (a, b) => new Date(a.createdAt || a.date || 0) - new Date(b.createdAt || b.date || 0)
+      );
+
+      res.json({
+        settings,
+        orders,
+        serverTime: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("KDS board error:", error);
+      res.status(500).json({ message: "Failed to load KDS board." });
+    }
+  });
+
+  router.patch("/orders/:orderId/status", tenantOnly, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { kitchenStatus } = req.body;
+
+      if (!allowedStatuses.includes(kitchenStatus)) {
+        return res.status(400).json({
+          message: "Invalid kitchen status."
         });
       }
 
+      const order = await findOrderForTenant(req.user.tenantId, orderId);
+
+      if (!order) {
+        return res.status(404).json({
+          message: "Order not found."
+        });
+      }
+
+      setOrderStatus(order, kitchenStatus, req.user.username);
+      const settings = await getKdsSettingsRecord(req.user.tenantId, defaultKdsSettings);
       attachTimerMeta(order, settings);
-    });
 
-    const orders = tenantOrders.sort(
-      (a, b) => new Date(a.createdAt || a.date || 0) - new Date(b.createdAt || b.date || 0)
-    );
+      const savedOrder = await saveOrderRecord(order);
 
-    if (changed) {
-      writeDb(db);
-    }
-
-    res.json({
-      settings,
-      orders,
-      serverTime: new Date().toISOString()
-    });
-  });
-
-  router.patch("/orders/:orderId/status", tenantOnly, (req, res) => {
-    const { orderId } = req.params;
-    const { kitchenStatus } = req.body;
-
-    if (!allowedStatuses.includes(kitchenStatus)) {
-      return res.status(400).json({
-        message: "Invalid kitchen status."
+      await addAuditLog({
+        tenantId: req.user.tenantId,
+        action: "KDS_MANUAL_STATUS_UPDATE",
+        actor: req.user.username,
+        details: {
+          orderId: savedOrder.id,
+          orderNo: savedOrder.orderNo,
+          kitchenStatus
+        }
       });
-    }
 
-    const db = ensureCollections(readDb());
-
-    const order = db.orders.find(
-      (item) =>
-        item.tenantId === req.user.tenantId &&
-        (item.id === orderId || item.orderNo === orderId)
-    );
-
-    if (!order) {
-      return res.status(404).json({
-        message: "Order not found."
+      res.json({
+        message: "Kitchen status updated.",
+        order: savedOrder
       });
+    } catch (error) {
+      console.error("KDS status update error:", error);
+      res.status(500).json({ message: "Failed to update kitchen status." });
     }
-
-    setOrderStatus(order, kitchenStatus, req.user.username);
-    const settings = getTenantSettings(db, req.user.tenantId);
-    attachTimerMeta(order, settings);
-
-    db.auditLogs.push({
-      id: `audit-${Date.now()}`,
-      tenantId: req.user.tenantId,
-      action: "KDS_MANUAL_STATUS_UPDATE",
-      actor: req.user.username,
-      details: {
-        orderId: order.id,
-        orderNo: order.orderNo,
-        kitchenStatus
-      },
-      createdAt: new Date().toISOString()
-    });
-
-    writeDb(db);
-
-    res.json({
-      message: "Kitchen status updated.",
-      order
-    });
   });
 
   return router;
 };
-
-

@@ -1,3 +1,271 @@
+===== backend/src/db.js =====
+const fs = require("fs");
+const path = require("path");
+const { Pool } = require("pg");
+
+const DB_PATH = path.join(__dirname, "..", "data", "db.json");
+
+const DATABASE_PROVIDER = String(process.env.DATABASE_PROVIDER || "local").toLowerCase();
+const DATABASE_URL = process.env.DATABASE_URL || "";
+
+let pool = null;
+let memoryDb = null;
+let initialized = false;
+let writeQueue = Promise.resolve();
+
+function initialData() {
+  return {
+    tenants: [],
+    users: [],
+    branches: [],
+    modules: [],
+    orders: [],
+    tables: [],
+    menuCategories: [],
+    menuItems: [],
+    inventoryItems: [],
+    stockMovements: [],
+    menuInventoryMappings: [],
+    suppliers: [],
+    purchaseInvoices: [],
+    expenses: [],
+    customers: [],
+    customerPointLogs: [],
+    driveThruTickets: [],
+    auditLogs: [],
+    staff: [],
+    restaurantSettings: [],
+    packages: [],
+    subscriptions: [],
+    subscriptionPayments: []
+  };
+}
+
+function normalizeDb(data) {
+  const base = initialData();
+  const clean = data && typeof data === "object" ? data : {};
+
+  Object.keys(base).forEach((key) => {
+    if (!Array.isArray(clean[key])) clean[key] = base[key];
+  });
+
+  return clean;
+}
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value || initialData()));
+}
+
+function ensureDataDir() {
+  const dir = path.dirname(DB_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+function ensureDbFile() {
+  ensureDataDir();
+
+  if (!fs.existsSync(DB_PATH)) {
+    fs.writeFileSync(DB_PATH, JSON.stringify(initialData(), null, 2));
+  }
+}
+
+function readLocalDb() {
+  ensureDbFile();
+
+  const raw = fs.readFileSync(DB_PATH, "utf-8");
+
+  try {
+    return normalizeDb(JSON.parse(raw));
+  } catch (error) {
+    console.error("Database JSON is corrupted:", error);
+    throw new Error("Database file is corrupted.");
+  }
+}
+
+function writeLocalDb(data) {
+  ensureDataDir();
+  const clean = normalizeDb(clone(data));
+  fs.writeFileSync(DB_PATH, JSON.stringify(clean, null, 2));
+  return clean;
+}
+
+function isSupabaseMode() {
+  return ["supabase", "postgres", "postgresql"].includes(DATABASE_PROVIDER);
+}
+
+function getPool() {
+  if (!DATABASE_URL) {
+    throw new Error("DATABASE_URL is required when DATABASE_PROVIDER=supabase.");
+  }
+
+  if (!pool) {
+    pool = new Pool({
+      connectionString: DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+      max: 5,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 15000
+    });
+  }
+
+  return pool;
+}
+
+async function ensurePostgresSchema() {
+  const client = await getPool().connect();
+
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS nexa_app_state (
+        id TEXT PRIMARY KEY,
+        data JSONB NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS nexa_app_state_updated_at_idx
+      ON nexa_app_state (updated_at);
+    `);
+  } finally {
+    client.release();
+  }
+}
+
+async function loadSupabaseDb() {
+  await ensurePostgresSchema();
+
+  const client = await getPool().connect();
+
+  try {
+    const result = await client.query(
+      "SELECT data FROM nexa_app_state WHERE id = $1 LIMIT 1",
+      ["main"]
+    );
+
+    if (result.rows.length > 0) {
+      return normalizeDb(result.rows[0].data);
+    }
+
+    const localSeed = fs.existsSync(DB_PATH) ? readLocalDb() : initialData();
+
+    await client.query(
+      `
+        INSERT INTO nexa_app_state (id, data, updated_at)
+        VALUES ($1, $2::jsonb, NOW())
+        ON CONFLICT (id)
+        DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()
+      `,
+      ["main", JSON.stringify(localSeed)]
+    );
+
+    console.log("Supabase was empty. Local db.json migrated to Supabase.");
+    return normalizeDb(localSeed);
+  } finally {
+    client.release();
+  }
+}
+
+async function persistSupabaseDb(data) {
+  const clean = normalizeDb(clone(data));
+
+  await ensurePostgresSchema();
+
+  const client = await getPool().connect();
+
+  try {
+    await client.query(
+      `
+        INSERT INTO nexa_app_state (id, data, updated_at)
+        VALUES ($1, $2::jsonb, NOW())
+        ON CONFLICT (id)
+        DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()
+      `,
+      ["main", JSON.stringify(clean)]
+    );
+  } finally {
+    client.release();
+  }
+}
+
+async function initDb() {
+  if (initialized) return memoryDb;
+
+  if (!isSupabaseMode()) {
+    memoryDb = readLocalDb();
+    initialized = true;
+    console.log("Database provider: local JSON");
+    return memoryDb;
+  }
+
+  memoryDb = await loadSupabaseDb();
+  initialized = true;
+  console.log("Database provider: Supabase/PostgreSQL");
+  return memoryDb;
+}
+
+function readDb() {
+  if (!initialized) {
+    if (isSupabaseMode()) {
+      throw new Error("Database is not initialized yet. Make sure initDb() runs before app.listen().");
+    }
+
+    memoryDb = readLocalDb();
+    initialized = true;
+  }
+
+  return clone(memoryDb);
+}
+
+function writeDb(data) {
+  const clean = normalizeDb(clone(data));
+  memoryDb = clean;
+
+  if (!isSupabaseMode()) {
+    writeLocalDb(clean);
+    return clean;
+  }
+
+  writeQueue = writeQueue
+    .then(() => persistSupabaseDb(clean))
+    .catch((error) => {
+      console.error("Failed to persist Supabase database:", error);
+    });
+
+  return clean;
+}
+
+async function flushDbWrites() {
+  await writeQueue;
+}
+
+function logAudit(action, actor, details = {}) {
+  const db = readDb();
+
+  db.auditLogs.push({
+    id: cryptoRandomId(),
+    action,
+    actor,
+    details,
+    createdAt: new Date().toISOString()
+  });
+
+  writeDb(db);
+}
+
+function cryptoRandomId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+module.exports = {
+  initDb,
+  readDb,
+  writeDb,
+  flushDbWrites,
+  logAudit
+};
+
+===== backend/src/server.js =====
 require("dotenv").config();
 
 const express = require("express");
@@ -12,20 +280,7 @@ const driveThruRoutes = require("./routes/driveThruRoutes");
 const cors = require("cors");
 const { v4: uuid } = require("uuid");
 
-const {
-  initDb,
-  readDb,
-  writeDb,
-  getNextOrderNumberForTenant,
-  saveOrderRecord,
-  getOrdersForTenant,
-  getKitchenOrdersForTenant,
-  findOrderForTenant,
-  updateOrderRecord,
-  getKdsSettingsRecord,
-  saveKdsSettingsRecord,
-  addAuditLog
-} = require("./db");
+const { initDb, readDb, writeDb } = require("./db");
 const { signToken, hashPassword, comparePassword } = require("./auth");
 const { requireAuth, requireSuperAdmin } = require("./middleware");
 const discountRoutes = require("./routes/discountRoutes");
@@ -1187,7 +1442,7 @@ app.patch("/api/tables/:tableId/clear", requireAuth, tenantOnly, (req, res) => {
   res.json({ message: "Table cleared.", table });
 });
 
-app.post("/api/orders", requireAuth, tenantOnly, async (req, res) => {
+app.post("/api/orders", requireAuth, tenantOnly, (req, res) => {
   try {
     const {
       mode,
@@ -1215,7 +1470,7 @@ app.post("/api/orders", requireAuth, tenantOnly, async (req, res) => {
 
     ensureInventoryForExistingMenu(db, req.user.tenantId, req.user.branchId || null);
 
-    const orderNo = await getNextOrderNumberForTenant(req.user.tenantId);
+    const orderNo = getNextOrderNumber(db, req.user.tenantId);
 
     const order = {
       id: uuid(),
@@ -1231,16 +1486,12 @@ app.post("/api/orders", requireAuth, tenantOnly, async (req, res) => {
         id: item.id,
         name: item.name,
         price: Number(item.price || 0),
-        qty: Number(item.qty || item.quantity || 1),
-        quantity: Number(item.qty || item.quantity || 1),
+        qty: Number(item.qty || 1),
         category: item.category || "",
-        note: item.note || "",
-        subtitle: item.subtitle || item.category || "Menu Item",
-        lineTotal: Number(item.price || 0) * Number(item.qty || item.quantity || 1)
+        note: item.note || ""
       })),
       customer: customer || {},
       phone: phone || "",
-      deliveryAddress: req.body.deliveryAddress || customer?.address || "",
       subtotal: Number(subtotal || 0),
       tax: Number(tax || 0),
       total: Number(total || 0),
@@ -1248,20 +1499,16 @@ app.post("/api/orders", requireAuth, tenantOnly, async (req, res) => {
       paymentStatus: paymentStatus || "unpaid",
       orderStatus: orderStatus || "placed",
       kitchenStatus: kitchenStatus || "placed",
-      kitchenStatusChangedAt: new Date().toISOString(),
       orderInstructions: orderInstructions || "",
       staff: req.body.staff || {},
-      waiterId: req.body.waiterId || req.body.staff?.waiter?.id || "",
-      riderId: req.body.riderId || req.body.staff?.rider?.id || "",
-      cashierId: req.body.cashierId || req.body.staff?.cashier?.id || "",
-      waiterName: req.body.waiterName || req.body.staff?.waiter?.name || "",
-      riderName: req.body.riderName || req.body.staff?.rider?.name || "",
-      cashierName: req.body.cashierName || req.body.staff?.cashier?.name || "",
+      waiterId: req.body.waiterId || "",
+      riderId: req.body.riderId || "",
+      cashierId: req.body.cashierId || "",
+      waiterName: req.body.waiterName || "",
+      riderName: req.body.riderName || "",
+      cashierName: req.body.cashierName || "",
       originalTotal: Number(req.body.originalTotal || total || 0),
       discountAmount: Number(req.body.discountAmount || 0),
-      systemDiscountAmount: Number(req.body.systemDiscountAmount || req.body.discountAmount || 0),
-      loyaltyRedeemedPoints: Number(req.body.loyaltyRedeemedPoints || 0),
-      loyaltyRedeemedAmount: Number(req.body.loyaltyRedeemedAmount || 0),
       discountsApplied: Array.isArray(req.body.discountsApplied) ? req.body.discountsApplied : [],
       couponCode: req.body.couponCode || "",
       taxName: req.body.taxName || "GST",
@@ -1276,6 +1523,7 @@ app.post("/api/orders", requireAuth, tenantOnly, async (req, res) => {
       updatedAt: new Date().toISOString()
     };
 
+    db.orders.push(order);
     deductInventoryForOrder(db, order, req.user);
 
     if (mode === "dine_in" && table?.id) {
@@ -1295,116 +1543,85 @@ app.post("/api/orders", requireAuth, tenantOnly, async (req, res) => {
       }
     }
 
-    // Keep non-order app state in JSON/Supabase app_state, but store orders in real SQL tables.
-    db.orders = Array.isArray(db.orders) ? db.orders : [];
-    if (!db.orders.some((item) => item.id === order.id)) {
-      db.orders.push(order);
-    }
     writeDb(db);
-
-    const savedOrder = await saveOrderRecord(order);
-
-    res.status(201).json({ message: "Order saved successfully.", order: savedOrder });
+    res.status(201).json({ message: "Order saved successfully.", order });
   } catch (error) {
     console.error("Create order error:", error);
     res.status(500).json({ message: "Failed to save order." });
   }
 });
 
-app.get("/api/orders", requireAuth, tenantOnly, async (req, res) => {
-  try {
-    const { mode, paymentStatus, kitchenStatus, limit } = req.query;
+app.get("/api/orders", requireAuth, tenantOnly, (req, res) => {
+  const db = ensureCollections(readDb());
+  const { mode, paymentStatus, kitchenStatus } = req.query;
 
-    const orders = await getOrdersForTenant(req.user.tenantId, {
-      mode,
-      paymentStatus,
-      kitchenStatus,
-      limit
-    });
+  let orders = db.orders.filter((order) => order.tenantId === req.user.tenantId);
 
-    res.json(orders);
-  } catch (error) {
-    console.error("Get orders error:", error);
-    res.status(500).json({ message: "Failed to load orders." });
-  }
+  if (mode && mode !== "all") orders = orders.filter((order) => order.mode === mode);
+  if (paymentStatus && paymentStatus !== "all") orders = orders.filter((order) => order.paymentStatus === paymentStatus);
+  if (kitchenStatus && kitchenStatus !== "all") orders = orders.filter((order) => order.kitchenStatus === kitchenStatus);
+
+  orders = orders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  res.json(orders);
 });
 
-app.get("/api/kds/orders", requireAuth, tenantOnly, async (req, res) => {
-  try {
-    const orders = await getKitchenOrdersForTenant(req.user.tenantId);
-    res.json(orders);
-  } catch (error) {
-    console.error("KDS orders error:", error);
-    res.status(500).json({ message: "Failed to load KDS orders." });
-  }
+app.get("/api/kds/orders", requireAuth, tenantOnly, (req, res) => {
+  const db = ensureCollections(readDb());
+
+  const orders = db.orders
+    .filter((order) => order.tenantId === req.user.tenantId)
+    .filter((order) => ["unconfirmed", "placed", "preparing", "ready"].includes(order.kitchenStatus))
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+  res.json(orders);
 });
 
-app.patch("/api/orders/:orderId/kitchen-status", requireAuth, tenantOnly, async (req, res) => {
-  try {
-    const { orderId } = req.params;
-    const { kitchenStatus } = req.body;
-    const allowed = ["unconfirmed", "placed", "new", "preparing", "ready", "served", "completed", "cancelled", "rider_picked", "rider_on_way", "rider_delivered", "cash_received"];
+app.patch("/api/orders/:orderId/kitchen-status", requireAuth, tenantOnly, (req, res) => {
+  const { orderId } = req.params;
+  const { kitchenStatus } = req.body;
+  const allowed = ["unconfirmed", "placed", "preparing", "ready", "served", "completed"];
 
-    if (!allowed.includes(kitchenStatus)) return res.status(400).json({ message: "Invalid kitchen status." });
+  if (!allowed.includes(kitchenStatus)) return res.status(400).json({ message: "Invalid kitchen status." });
 
-    const order = await updateOrderRecord(req.user.tenantId, orderId, (item) => {
-      const finalKitchenStatus = kitchenStatus === "served" ? "completed" : kitchenStatus;
+  const db = ensureCollections(readDb());
 
-      item.kitchenStatus = finalKitchenStatus;
-      item.kitchenStatusChangedAt = new Date().toISOString();
-      item.kitchenStatusChangedBy = req.user.username;
+  const order = db.orders.find((item) => item.id === orderId && item.tenantId === req.user.tenantId);
+  if (!order) return res.status(404).json({ message: "Order not found." });
 
-      if (finalKitchenStatus === "completed") {
-        item.orderStatus = "completed";
-      }
+  const finalKitchenStatus = kitchenStatus === "served" ? "completed" : kitchenStatus;
 
-      if (finalKitchenStatus === "cash_received") {
-        item.paymentStatus = "paid";
-        item.paymentMethod = item.paymentMethod || "Cash on Delivery";
-        item.orderStatus = "completed";
-        item.cashReceivedAt = new Date().toISOString();
-      }
+  order.kitchenStatus = finalKitchenStatus;
+  order.updatedAt = new Date().toISOString();
 
-      return item;
-    });
-
-    if (!order) return res.status(404).json({ message: "Order not found." });
-
-    res.json({ message: "Kitchen status updated.", order });
-  } catch (error) {
-    console.error("Kitchen status update error:", error);
-    res.status(500).json({ message: "Failed to update kitchen status." });
+  if (finalKitchenStatus === "completed") {
+    order.orderStatus = "completed";
   }
+
+  writeDb(db);
+
+  res.json({ message: "Kitchen status updated.", order });
 });
 
-app.patch("/api/orders/:orderId/payment", requireAuth, tenantOnly, async (req, res) => {
-  try {
-    const { orderId } = req.params;
-    const { paymentStatus, paymentMethod } = req.body;
-    const allowed = ["paid", "unpaid", "partial", "complimentary"];
+app.patch("/api/orders/:orderId/payment", requireAuth, tenantOnly, (req, res) => {
+  const { orderId } = req.params;
+  const { paymentStatus, paymentMethod } = req.body;
+  const allowed = ["paid", "unpaid", "partial", "complimentary"];
 
-    if (!allowed.includes(paymentStatus)) return res.status(400).json({ message: "Invalid payment status." });
+  if (!allowed.includes(paymentStatus)) return res.status(400).json({ message: "Invalid payment status." });
 
-    const order = await updateOrderRecord(req.user.tenantId, orderId, (item) => {
-      item.paymentStatus = paymentStatus;
-      item.paymentMethod = paymentMethod || item.paymentMethod;
-      item.updatedAt = new Date().toISOString();
+  const db = ensureCollections(readDb());
 
-      if (paymentStatus === "paid" && !item.paidAt) {
-        item.paidAt = new Date().toISOString();
-        item.paidBy = req.user.username;
-      }
+  const order = db.orders.find((item) => item.id === orderId && item.tenantId === req.user.tenantId);
+  if (!order) return res.status(404).json({ message: "Order not found." });
 
-      return item;
-    });
+  order.paymentStatus = paymentStatus;
+  order.paymentMethod = paymentMethod || order.paymentMethod;
+  order.updatedAt = new Date().toISOString();
 
-    if (!order) return res.status(404).json({ message: "Order not found." });
+  writeDb(db);
 
-    res.json({ message: "Payment updated.", order });
-  } catch (error) {
-    console.error("Payment update error:", error);
-    res.status(500).json({ message: "Failed to update payment." });
-  }
+  res.json({ message: "Payment updated.", order });
 });
 
 app.use("/api/order-status", requireAuth, orderStatusRoutes({ readDb, writeDb }));
@@ -1473,13 +1690,13 @@ initDb()
 
 
 
-app.use("/api/order-edit", requireAuth, orderEditRoutes({ readDb, writeDb, findOrderForTenant, saveOrderRecord, addAuditLog }));
+app.use("/api/order-edit", requireAuth, orderEditRoutes({ readDb, writeDb }));
 
 
 app.use("/api/seed", requireAuth, premiumMenuSeedRoutes({ readDb, writeDb }));
 
 
-app.use("/api/kds-auto", requireAuth, kdsAutoRoutes({ getKitchenOrdersForTenant, getKdsSettingsRecord, saveKdsSettingsRecord, saveOrderRecord, findOrderForTenant, addAuditLog }));
+app.use("/api/kds-auto", requireAuth, kdsAutoRoutes({ readDb, writeDb }));
 
 
 app.use("/api/tables", requireAuth, tableAdvancedRoutes({ readDb, writeDb }));
@@ -1489,4 +1706,742 @@ app.use("/api/tables", requireAuth, tableAdvancedRoutes({ readDb, writeDb }));
 
 
 
+
+
+===== backend/src/routes/ordersRoutes.js =====
+
+===== backend/src/routes/orderEditRoutes.js =====
+const express = require("express");
+
+const router = express.Router();
+
+function ensureCollections(db) {
+  db.orders = Array.isArray(db.orders) ? db.orders : [];
+  db.auditLogs = Array.isArray(db.auditLogs) ? db.auditLogs : [];
+  return db;
+}
+
+function tenantOnly(req, res, next) {
+  if (!req.user?.tenantId) {
+    return res.status(403).json({
+      message: "Restaurant account access required."
+    });
+  }
+
+  next();
+}
+
+function normalizeItems(items) {
+  if (!Array.isArray(items)) return [];
+
+  return items
+    .filter((item) => item && item.name)
+    .map((item, index) => {
+      const qty = Math.max(1, Number(item.qty || item.quantity || 1));
+      const price = Math.max(0, Number(item.price || 0));
+
+      return {
+        ...item,
+        id: item.id || `edited-item-${Date.now()}-${index}`,
+        name: item.name,
+        category: item.category || "Menu",
+        subtitle: item.subtitle || item.category || "Menu Item",
+        price,
+        qty,
+        quantity: qty,
+        lineTotal: qty * price
+      };
+    });
+}
+
+function recalculateOrder(order, nextItems) {
+  const items = normalizeItems(nextItems);
+  const subtotal = items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.qty || 1), 0);
+
+  const systemDiscountAmount = Number(order.systemDiscountAmount || order.discountAmount || 0);
+  const loyaltyRedeemedAmount = Number(order.loyaltyRedeemedAmount || 0);
+  const safeDiscount = Math.min(subtotal, Math.max(0, systemDiscountAmount));
+
+  const discountedSubtotal = Math.max(0, subtotal - safeDiscount);
+  const taxPercent = Number(order.taxPercent || order.restaurantSettings?.taxPercent || 0);
+  const serviceChargePercent = Number(order.serviceChargePercent || order.restaurantSettings?.serviceChargePercent || 0);
+
+  const tax = Math.round(discountedSubtotal * (taxPercent / 100));
+  const serviceChargeAmount = Math.round(discountedSubtotal * (serviceChargePercent / 100));
+  const total = Math.max(0, discountedSubtotal + tax + serviceChargeAmount - loyaltyRedeemedAmount);
+
+  return {
+    items,
+    subtotal,
+    tax,
+    serviceChargeAmount,
+    total,
+    originalTotal: subtotal + tax + serviceChargeAmount,
+    discountAmount: safeDiscount + loyaltyRedeemedAmount,
+    systemDiscountAmount: safeDiscount,
+    loyaltyRedeemedAmount,
+    taxPercent,
+    serviceChargePercent
+  };
+}
+
+function findTenantOrder(db, tenantId, orderId) {
+  return db.orders.find(
+    (item) =>
+      item.tenantId === tenantId &&
+      (item.id === orderId || item.orderNo === orderId)
+  );
+}
+
+function normalizePaymentMethod(method) {
+  const raw = String(method || "Cash").trim();
+  if (!raw) return "Cash";
+
+  const key = raw.toLowerCase();
+  if (key.includes("card")) return "Card";
+  if (key.includes("easy")) return "Easypaisa";
+  if (key.includes("jazz")) return "JazzCash";
+  if (key.includes("bank")) return "Bank Transfer";
+  if (key.includes("cash")) return "Cash";
+  return raw;
+}
+
+module.exports = function orderEditRoutes({ readDb, writeDb }) {
+  router.patch("/:orderId", tenantOnly, (req, res) => {
+    const { orderId } = req.params;
+    const db = ensureCollections(readDb());
+
+    const order = findTenantOrder(db, req.user.tenantId, orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Order not found."
+      });
+    }
+
+    if (order.orderStatus === "cancelled" || order.paymentStatus === "cancelled") {
+      return res.status(400).json({
+        message: "Cancelled order cannot be edited."
+      });
+    }
+
+    const before = {
+      items: order.items,
+      subtotal: order.subtotal,
+      tax: order.tax,
+      serviceChargeAmount: order.serviceChargeAmount,
+      total: order.total,
+      orderStatus: order.orderStatus,
+      kitchenStatus: order.kitchenStatus
+    };
+
+    const recalculated = recalculateOrder(order, req.body.items);
+
+    order.items = recalculated.items;
+    order.subtotal = recalculated.subtotal;
+    order.tax = recalculated.tax;
+    order.serviceChargeAmount = recalculated.serviceChargeAmount;
+    order.total = recalculated.total;
+    order.originalTotal = recalculated.originalTotal;
+    order.discountAmount = recalculated.discountAmount;
+    order.systemDiscountAmount = recalculated.systemDiscountAmount;
+    order.loyaltyRedeemedAmount = recalculated.loyaltyRedeemedAmount;
+
+    order.orderInstructions = req.body.orderInstructions ?? order.orderInstructions;
+    order.customer = req.body.customer ?? order.customer;
+    order.phone = req.body.phone ?? order.phone;
+
+    const requestedOrderStatus = String(req.body.orderStatus || order.orderStatus || "placed").trim().toLowerCase();
+    const requestedKitchenStatus = String(req.body.kitchenStatus || "placed").trim().toLowerCase();
+
+    order.orderStatus = requestedOrderStatus === "served" ? "completed" : requestedOrderStatus;
+    order.kitchenStatus = requestedKitchenStatus === "served" ? "completed" : requestedKitchenStatus;
+    order.editedAt = new Date().toISOString();
+    order.editedBy = req.user.username;
+    order.updatedAt = new Date().toISOString();
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "ORDER_EDITED",
+      actor: req.user.username,
+      details: {
+        orderId: order.id,
+        orderNo: order.orderNo,
+        before,
+        after: {
+          items: order.items,
+          subtotal: order.subtotal,
+          tax: order.tax,
+          serviceChargeAmount: order.serviceChargeAmount,
+          total: order.total,
+          orderStatus: order.orderStatus,
+          kitchenStatus: order.kitchenStatus
+        }
+      },
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: "Order updated successfully.",
+      order
+    });
+  });
+
+  router.patch("/:orderId/pay", tenantOnly, (req, res) => {
+    const { orderId } = req.params;
+    const db = ensureCollections(readDb());
+
+    const order = findTenantOrder(db, req.user.tenantId, orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Order not found."
+      });
+    }
+
+    if (order.paymentStatus === "cancelled" || order.orderStatus === "cancelled") {
+      return res.status(400).json({
+        message: "Cancelled order cannot be paid."
+      });
+    }
+
+    if (order.paymentStatus === "paid" || order.paymentStatus === "complimentary") {
+      return res.status(400).json({
+        message: "Order is already paid."
+      });
+    }
+
+    const paymentMethod = normalizePaymentMethod(req.body.paymentMethod);
+    const amountReceived = Number(req.body.amountReceived || order.total || 0);
+
+    const before = {
+      paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod,
+      paidAt: order.paidAt
+    };
+
+    order.paymentStatus = "paid";
+    order.paymentMethod = paymentMethod;
+    order.amountReceived = amountReceived;
+    order.paymentReference = req.body.paymentReference || "";
+    order.paymentNote = req.body.note || "Marked paid from Orders Panel";
+    order.paidAt = new Date().toISOString();
+    order.paidBy = req.user.username;
+    order.updatedAt = new Date().toISOString();
+
+    if (order.kitchenStatus === "cash_received" || order.kitchenStatus === "served") {
+      order.orderStatus = "completed";
+      order.kitchenStatus = "completed";
+    } else if (order.orderStatus === "served") {
+      order.orderStatus = "completed";
+    } else if (!["completed"].includes(order.orderStatus)) {
+      order.orderStatus = order.orderStatus || "placed";
+    }
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "ORDER_MARKED_PAID",
+      actor: req.user.username,
+      details: {
+        orderId: order.id,
+        orderNo: order.orderNo,
+        before,
+        after: {
+          paymentStatus: order.paymentStatus,
+          paymentMethod: order.paymentMethod,
+          amountReceived: order.amountReceived,
+          paidAt: order.paidAt
+        }
+      },
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: "Order marked as paid successfully.",
+      order
+    });
+  });
+
+  router.patch("/:orderId/cancel", tenantOnly, (req, res) => {
+    const { orderId } = req.params;
+    const db = ensureCollections(readDb());
+
+    const order = findTenantOrder(db, req.user.tenantId, orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Order not found."
+      });
+    }
+
+    const before = {
+      paymentStatus: order.paymentStatus,
+      orderStatus: order.orderStatus,
+      kitchenStatus: order.kitchenStatus
+    };
+
+    order.paymentStatus = "cancelled";
+    order.orderStatus = "cancelled";
+    order.kitchenStatus = "cancelled";
+    order.cancelReason = req.body.reason || "Cancelled from Orders Panel";
+    order.cancelledAt = new Date().toISOString();
+    order.cancelledBy = req.user.username;
+    order.updatedAt = new Date().toISOString();
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "ORDER_CANCELLED",
+      actor: req.user.username,
+      details: {
+        orderId: order.id,
+        orderNo: order.orderNo,
+        before,
+        reason: order.cancelReason
+      },
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: "Order cancelled successfully.",
+      order
+    });
+  });
+
+  return router;
+};
+
+
+===== backend/src/routes/kdsAutoRoutes.js =====
+const express = require("express");
+
+const router = express.Router();
+
+const defaultKdsSettings = {
+  autoEnabled: true,
+  newToPreparingMinutes: 2,
+  preparingToReadyMinutes: 8,
+  readyToRiderPickedMinutes: 2,
+  riderPickedToOnWayMinutes: 2,
+  riderOnWayToDeliveredMinutes: 20,
+  deliveredToCashReceivedMinutes: 3
+};
+
+const allowedStatuses = [
+  "new",
+  "placed",
+  "preparing",
+  "ready",
+  "served",
+  "completed",
+  "cancelled",
+  "rider_picked",
+  "rider_on_way",
+  "rider_delivered",
+  "cash_received"
+];
+
+function ensureCollections(db) {
+  db.orders = Array.isArray(db.orders) ? db.orders : [];
+  db.kdsSettings = Array.isArray(db.kdsSettings) ? db.kdsSettings : [];
+  db.auditLogs = Array.isArray(db.auditLogs) ? db.auditLogs : [];
+  return db;
+}
+
+function tenantOnly(req, res, next) {
+  if (!req.user?.tenantId) {
+    return res.status(403).json({
+      message: "Restaurant account access required."
+    });
+  }
+
+  next();
+}
+
+function getTenantSettings(db, tenantId) {
+  let settings = db.kdsSettings.find((item) => item.tenantId === tenantId);
+
+  if (!settings) {
+    settings = {
+      id: `kds-settings-${tenantId}`,
+      tenantId,
+      ...defaultKdsSettings,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    db.kdsSettings.push(settings);
+  }
+
+  return {
+    ...defaultKdsSettings,
+    ...settings
+  };
+}
+
+function normalizeStatus(order) {
+  const status = order.kitchenStatus || order.orderStatus || "new";
+
+  if (status === "placed" || status === "unconfirmed") return "new";
+  if (status === "completed") return "served";
+
+  return status;
+}
+
+function statusDurationMs(status, settings) {
+  const current = status === "placed" ? "new" : status;
+
+  const minutes = {
+    new: settings.newToPreparingMinutes,
+    preparing: settings.preparingToReadyMinutes,
+    ready: settings.readyToRiderPickedMinutes,
+    rider_picked: settings.riderPickedToOnWayMinutes,
+    rider_on_way: settings.riderOnWayToDeliveredMinutes,
+    rider_delivered: settings.deliveredToCashReceivedMinutes
+  }[current];
+
+  return Math.max(1, Number(minutes || 1)) * 60 * 1000;
+}
+
+function isDeliveryOrder(order) {
+  return order.mode === "delivery";
+}
+
+function isCashDelivery(order) {
+  const method = String(order.paymentMethod || "").toLowerCase();
+  const paymentStatus = String(order.paymentStatus || "").toLowerCase();
+
+  return (
+    isDeliveryOrder(order) &&
+    (
+      paymentStatus === "unpaid" ||
+      method.includes("cash on delivery") ||
+      method === "cod" ||
+      method.includes("pay later") ||
+      method.includes("unpaid")
+    )
+  );
+}
+
+function nextStatusFor(order) {
+  const current = normalizeStatus(order);
+
+  if (current === "new") return "preparing";
+  if (current === "preparing") return "ready";
+
+  if (!isDeliveryOrder(order)) {
+    if (current === "ready") return "served";
+    return null;
+  }
+
+  if (current === "ready") return "rider_picked";
+  if (current === "rider_picked") return "rider_on_way";
+  if (current === "rider_on_way") return "rider_delivered";
+  if (current === "rider_delivered" && isCashDelivery(order)) return "cash_received";
+
+  return null;
+}
+
+function setOrderStatus(order, nextStatus, actor = "system-auto-timer", changedAt = new Date().toISOString()) {
+  order.kitchenStatus = nextStatus;
+  if (order.mode === "delivery") {
+    order.delivery = { ...(order.delivery || {}), dispatchStatus: nextStatus };
+  }
+  order.kitchenStatusChangedAt = changedAt;
+  order.kitchenStatusChangedBy = actor;
+  order.updatedAt = new Date().toISOString();
+
+  if (nextStatus === "served") {
+    order.orderStatus = "served";
+  } else if (nextStatus === "cash_received") {
+    order.paymentStatus = "paid";
+    order.paymentMethod = order.paymentMethod || "Cash on Delivery";
+    order.cashReceivedAt = changedAt;
+    order.orderStatus = "completed";
+  } else if (nextStatus === "rider_delivered") {
+    order.deliveredAt = changedAt;
+    order.orderStatus = "served";
+  } else if (!["cancelled", "held"].includes(order.orderStatus)) {
+    order.orderStatus = "placed";
+  }
+}
+
+function ensureKitchenClock(order) {
+  if (!order.kitchenStatus) {
+    order.kitchenStatus = normalizeStatus(order);
+  }
+
+  if (!order.kitchenStatusChangedAt) {
+    order.kitchenStatusChangedAt = order.createdAt || order.date || order.updatedAt || new Date().toISOString();
+  }
+}
+
+function autoProgressOrder(order, settings) {
+  if (!settings.autoEnabled) return [];
+
+  ensureKitchenClock(order);
+
+  const progressed = [];
+  const now = Date.now();
+  let guard = 0;
+
+  while (guard < 8) {
+    guard += 1;
+
+    const current = normalizeStatus(order);
+
+    if (["cancelled", "served", "completed", "cash_received"].includes(current)) {
+      break;
+    }
+
+    const nextStatus = nextStatusFor(order);
+
+    if (!nextStatus) break;
+
+    const changedAtMs = new Date(order.kitchenStatusChangedAt || order.createdAt || Date.now()).getTime();
+
+    if (Number.isNaN(changedAtMs)) break;
+
+    const dueMs = statusDurationMs(current, settings);
+    const nextChangeMs = changedAtMs + dueMs;
+
+    if (now < nextChangeMs) break;
+
+    const nextChangedAt = new Date(nextChangeMs).toISOString();
+    setOrderStatus(order, nextStatus, "system-auto-timer", nextChangedAt);
+    progressed.push(nextStatus);
+  }
+
+  return progressed;
+}
+
+function visibleKitchenOrder(order) {
+  if (order.paymentStatus === "cancelled" || order.orderStatus === "cancelled") return false;
+
+  return ["paid", "unpaid", "complimentary"].includes(order.paymentStatus);
+}
+
+function attachTimerMeta(order, settings) {
+  ensureKitchenClock(order);
+
+  const current = normalizeStatus(order);
+  const nextStatus = nextStatusFor(order);
+  const changedAtMs = new Date(order.kitchenStatusChangedAt || order.createdAt || Date.now()).getTime();
+  const durationMs = statusDurationMs(current, settings);
+  const dueAtMs = changedAtMs + durationMs;
+  const now = Date.now();
+
+  order.kdsTimer = {
+    currentStatus: current,
+    nextStatus,
+    changedAt: order.kitchenStatusChangedAt,
+    dueAt: nextStatus ? new Date(dueAtMs).toISOString() : null,
+    durationSeconds: Math.round(durationMs / 1000),
+    elapsedSeconds: Math.max(0, Math.floor((now - changedAtMs) / 1000)),
+    remainingSeconds: nextStatus ? Math.max(0, Math.ceil((dueAtMs - now) / 1000)) : 0,
+    autoEnabled: Boolean(settings.autoEnabled)
+  };
+
+  return order;
+}
+
+module.exports = function kdsAutoRoutes({ readDb, writeDb }) {
+  router.get("/settings", tenantOnly, (req, res) => {
+    const db = ensureCollections(readDb());
+    const settings = getTenantSettings(db, req.user.tenantId);
+
+    writeDb(db);
+
+    res.json({ settings });
+  });
+
+  router.patch("/settings", tenantOnly, (req, res) => {
+    const db = ensureCollections(readDb());
+    const settings = getTenantSettings(db, req.user.tenantId);
+
+    const numericKeys = [
+      "newToPreparingMinutes",
+      "preparingToReadyMinutes",
+      "readyToRiderPickedMinutes",
+      "riderPickedToOnWayMinutes",
+      "riderOnWayToDeliveredMinutes",
+      "deliveredToCashReceivedMinutes"
+    ];
+
+    if (typeof req.body.autoEnabled === "boolean") {
+      settings.autoEnabled = req.body.autoEnabled;
+    }
+
+    numericKeys.forEach((key) => {
+      if (req.body[key] !== undefined) {
+        settings[key] = Math.max(1, Number(req.body[key] || defaultKdsSettings[key]));
+      }
+    });
+
+    settings.updatedAt = new Date().toISOString();
+    settings.updatedBy = req.user.username;
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "KDS_SETTINGS_UPDATED",
+      actor: req.user.username,
+      details: settings,
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: "KDS timer settings updated.",
+      settings
+    });
+  });
+
+  router.get("/board", tenantOnly, (req, res) => {
+    const db = ensureCollections(readDb());
+    const settings = getTenantSettings(db, req.user.tenantId);
+
+    let changed = false;
+
+    const tenantOrders = db.orders.filter(
+      (order) => order.tenantId === req.user.tenantId && visibleKitchenOrder(order)
+    );
+
+    tenantOrders.forEach((order) => {
+      const beforeStatus = normalizeStatus(order);
+
+      ensureKitchenClock(order);
+
+      const progressed = autoProgressOrder(order, settings);
+
+      if (progressed.length > 0 || beforeStatus !== normalizeStatus(order)) {
+        changed = true;
+
+        db.auditLogs.push({
+          id: `audit-${Date.now()}-${order.id || order.orderNo}`,
+          tenantId: req.user.tenantId,
+          action: "KDS_AUTO_STATUS_PROGRESS",
+          actor: "system-auto-timer",
+          details: {
+            orderId: order.id,
+            orderNo: order.orderNo,
+            progressed
+          },
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      attachTimerMeta(order, settings);
+    });
+
+    const orders = tenantOrders.sort(
+      (a, b) => new Date(a.createdAt || a.date || 0) - new Date(b.createdAt || b.date || 0)
+    );
+
+    if (changed) {
+      writeDb(db);
+    }
+
+    res.json({
+      settings,
+      orders,
+      serverTime: new Date().toISOString()
+    });
+  });
+
+  router.patch("/orders/:orderId/status", tenantOnly, (req, res) => {
+    const { orderId } = req.params;
+    const { kitchenStatus } = req.body;
+
+    if (!allowedStatuses.includes(kitchenStatus)) {
+      return res.status(400).json({
+        message: "Invalid kitchen status."
+      });
+    }
+
+    const db = ensureCollections(readDb());
+
+    const order = db.orders.find(
+      (item) =>
+        item.tenantId === req.user.tenantId &&
+        (item.id === orderId || item.orderNo === orderId)
+    );
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Order not found."
+      });
+    }
+
+    setOrderStatus(order, kitchenStatus, req.user.username);
+    const settings = getTenantSettings(db, req.user.tenantId);
+    attachTimerMeta(order, settings);
+
+    db.auditLogs.push({
+      id: `audit-${Date.now()}`,
+      tenantId: req.user.tenantId,
+      action: "KDS_MANUAL_STATUS_UPDATE",
+      actor: req.user.username,
+      details: {
+        orderId: order.id,
+        orderNo: order.orderNo,
+        kitchenStatus
+      },
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    res.json({
+      message: "Kitchen status updated.",
+      order
+    });
+  });
+
+  return router;
+};
+
+
+
+
+===== backend/package.json =====
+{
+  "name": "nexapos-pro-backend",
+  "version": "1.0.0",
+  "description": "NexaPOS Pro Backend - Multi Tenant POS System",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js"
+  },
+  "keywords": [
+    "pos",
+    "restaurant",
+    "saas",
+    "multi-tenant"
+  ],
+  "author": "Shazee",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.21.0",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
 
