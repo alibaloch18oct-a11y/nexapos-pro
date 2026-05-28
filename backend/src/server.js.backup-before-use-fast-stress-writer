@@ -24,8 +24,7 @@ const {
   updateOrderRecord,
   getKdsSettingsRecord,
   saveKdsSettingsRecord,
-  addAuditLog,
-  createFastStressOrderRecord
+  addAuditLog
 } = require("./db");
 const { signToken, hashPassword, comparePassword } = require("./auth");
 const { requireAuth, requireSuperAdmin } = require("./middleware");
@@ -1492,10 +1491,12 @@ app.post("/api/stress/order-flow", async (req, res) => {
     }
 
     const now = new Date().toISOString();
+    const orderNo = await getNextOrderNumberForTenant(decoded.tenantId);
 
     const order = {
       id: randomUUID(),
       tenantId: decoded.tenantId,
+      orderNo,
       mode: req.body.mode || "delivery",
       items: Array.isArray(req.body.items) && req.body.items.length
         ? req.body.items
@@ -1532,7 +1533,7 @@ app.post("/api/stress/order-flow", async (req, res) => {
       kitchenStatusChangedAt: now
     };
 
-    const saved = await createFastStressOrderRecord(order);
+    const saved = await saveOrderRecord(order);
 
     return res.status(201).json({
       success: true,
@@ -1561,8 +1562,6 @@ app.listen(PORT, () => {
     console.error("Failed to initialize database:", error);
     process.exit(1);
   });
-
-
 
 
 

@@ -24,8 +24,7 @@ const {
   updateOrderRecord,
   getKdsSettingsRecord,
   saveKdsSettingsRecord,
-  addAuditLog,
-  createFastStressOrderRecord
+  addAuditLog
 } = require("./db");
 const { signToken, hashPassword, comparePassword } = require("./auth");
 const { requireAuth, requireSuperAdmin } = require("./middleware");
@@ -1466,94 +1465,7 @@ app.get('/api/health', async (req, res) => {
 
 initDb()
   .then(() => {
-    
-
-
-// =========================================================
-// PERFORMANCE TEST ROUTE - LIGHTWEIGHT REAL ORDER FLOW
-// Self-contained auth so it does not depend on authenticateToken position.
-// =========================================================
-app.post("/api/stress/order-flow", async (req, res) => {
-  try {
-    const jwt = require("jsonwebtoken");
-    const { randomUUID } = require("crypto");
-
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-
-    if (!token) {
-      return res.status(401).json({ message: "Token required." });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "nexapos-secret-key");
-
-    if (!decoded?.tenantId) {
-      return res.status(403).json({ message: "Restaurant account access required." });
-    }
-
-    const now = new Date().toISOString();
-
-    const order = {
-      id: randomUUID(),
-      tenantId: decoded.tenantId,
-      mode: req.body.mode || "delivery",
-      items: Array.isArray(req.body.items) && req.body.items.length
-        ? req.body.items
-        : [
-            {
-              id: "stress-zinger",
-              name: "Stress Test Zinger Burger",
-              category: "Burgers",
-              price: 650,
-              qty: 1,
-              quantity: 1
-            }
-          ],
-      customer: req.body.customer || {
-        firstName: "Stress",
-        lastName: "Customer",
-        address: "Stress Test Street Hyderabad"
-      },
-      phone: req.body.phone || "03001234567",
-      deliveryAddress: req.body.deliveryAddress || "Stress Test Street Hyderabad",
-      riderId: req.body.riderId || "stress-rider",
-      riderName: req.body.riderName || "Stress Rider",
-      subtotal: Number(req.body.subtotal || 650),
-      tax: Number(req.body.tax || 33),
-      total: Number(req.body.total || 683),
-      originalTotal: Number(req.body.originalTotal || 683),
-      paymentMethod: req.body.paymentMethod || "Cash on Delivery",
-      paymentStatus: req.body.paymentStatus || "unpaid",
-      orderStatus: req.body.orderStatus || "placed",
-      kitchenStatus: req.body.kitchenStatus || "placed",
-      orderInstructions: req.body.orderInstructions || "Lightweight stress order flow",
-      createdAt: now,
-      updatedAt: now,
-      kitchenStatusChangedAt: now
-    };
-
-    const saved = await createFastStressOrderRecord(order);
-
-    return res.status(201).json({
-      success: true,
-      message: "Stress order created.",
-      orderId: saved.id,
-      orderNo: saved.orderNo,
-      total: saved.total,
-      kitchenStatus: saved.kitchenStatus,
-      paymentStatus: saved.paymentStatus
-    });
-  } catch (error) {
-    console.error("Stress order flow error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to create stress order.",
-      error: error.message
-    });
-  }
-});
-
-app.listen(PORT, () => {
+    app.listen(PORT, () => {
       console.log(`NexaPOS Pro backend running on port ${PORT}`);
     });
   })
@@ -1561,9 +1473,5 @@ app.listen(PORT, () => {
     console.error("Failed to initialize database:", error);
     process.exit(1);
   });
-
-
-
-
 
 

@@ -1,0 +1,65 @@
+config:
+  target: "http://localhost:5000"
+  phases:
+    - duration: 60
+      arrivalRate: 1
+      name: "Light SaaS order flow - 1/sec"
+    - duration: 120
+      arrivalRate: 2
+      name: "Restaurant SaaS order flow - 2/sec"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+scenarios:
+  - name: "NexaPOS lightweight real order flow"
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            username: "stressstable"
+            password: "stressstable123"
+          capture:
+            - json: "$.token"
+              as: "token"
+
+      - post:
+          url: "/api/stress/order-flow"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          json:
+            mode: "delivery"
+            items:
+              - id: "stress-zinger"
+                name: "Stress Test Zinger Burger"
+                category: "Burgers"
+                price: 650
+                qty: 1
+                quantity: 1
+            customer:
+              firstName: "Stress"
+              lastName: "Customer"
+              address: "Stress Test Street Hyderabad"
+            phone: "03001234567"
+            deliveryAddress: "Stress Test Street Hyderabad"
+            riderId: "stress-rider"
+            riderName: "Stress Rider"
+            subtotal: 650
+            tax: 33
+            total: 683
+            originalTotal: 683
+            paymentMethod: "Cash on Delivery"
+            paymentStatus: "unpaid"
+            orderStatus: "placed"
+            kitchenStatus: "placed"
+            orderInstructions: "Lightweight final stress test"
+
+      - get:
+          url: "/api/kds-auto/board"
+          headers:
+            Authorization: "Bearer {{ token }}"
+
+      - get:
+          url: "/api/orders?limit=20"
+          headers:
+            Authorization: "Bearer {{ token }}"

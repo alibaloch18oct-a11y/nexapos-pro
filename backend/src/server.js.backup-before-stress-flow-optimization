@@ -1,4 +1,4 @@
-﻿require("dotenv").config();
+require("dotenv").config();
 
 const express = require("express");
 const demoPolishRoutes = require("./routes/demoPolishRoutes");
@@ -24,8 +24,7 @@ const {
   updateOrderRecord,
   getKdsSettingsRecord,
   saveKdsSettingsRecord,
-  addAuditLog,
-  createFastStressOrderRecord
+  addAuditLog
 } = require("./db");
 const { signToken, hashPassword, comparePassword } = require("./auth");
 const { requireAuth, requireSuperAdmin } = require("./middleware");
@@ -221,16 +220,16 @@ function defaultMenuForTenant(tenantId, branchId) {
   }
 
   const rawItems = [
-    { category: "Wings & Wraps", name: "Crispy Hot Wings", subtitle: "Crispy hot wings", price: 300, costPrice: 160, stock: 60, emoji: "ðŸ—" },
-    { category: "Wings & Wraps", name: "Crispy BBQ Wings", subtitle: "Crispy BBQ wings", price: 700, costPrice: 410, stock: 45, emoji: "ðŸ–" },
-    { category: "Wings & Wraps", name: "Grilled Peri Peri Wings", subtitle: "Grilled peri peri wings", price: 599, costPrice: 320, stock: 35, emoji: "ðŸ”¥", discount: "15% off" },
-    { category: "Wings & Wraps", name: "Signature Grilled Wrap", subtitle: "Signature grilled wrap", price: 649, costPrice: 330, stock: 55, emoji: "ðŸŒ¯" },
-    { category: "Burgerz", name: "Khan Wrap", subtitle: "Testing tasty", price: 900, costPrice: 480, stock: 40, emoji: "ðŸ”" },
-    { category: "Burgerz", name: "Pizza Fajita", subtitle: "Fajita cheesy pizza", price: 820, costPrice: 430, stock: 30, emoji: "ðŸ•" },
-    { category: "Fries Station", name: "Loaded Fries", subtitle: "Cheese fries with sauce", price: 450, costPrice: 210, stock: 70, emoji: "ðŸŸ" },
-    { category: "Special Food", name: "Alfredo Pasta", subtitle: "Creamy pasta", price: 980, costPrice: 520, stock: 25, emoji: "ðŸ", discount: "10% off" },
-    { category: "Karahi", name: "Chicken Karahi", subtitle: "Fresh karahi with spices", price: 1600, costPrice: 950, stock: 20, emoji: "ðŸ²" },
-    { category: "Classic Food", name: "Chicken Biryani", subtitle: "Classic spicy biryani", price: 380, costPrice: 190, stock: 80, emoji: "ðŸ›" }
+    { category: "Wings & Wraps", name: "Crispy Hot Wings", subtitle: "Crispy hot wings", price: 300, costPrice: 160, stock: 60, emoji: "🍗" },
+    { category: "Wings & Wraps", name: "Crispy BBQ Wings", subtitle: "Crispy BBQ wings", price: 700, costPrice: 410, stock: 45, emoji: "🍖" },
+    { category: "Wings & Wraps", name: "Grilled Peri Peri Wings", subtitle: "Grilled peri peri wings", price: 599, costPrice: 320, stock: 35, emoji: "🔥", discount: "15% off" },
+    { category: "Wings & Wraps", name: "Signature Grilled Wrap", subtitle: "Signature grilled wrap", price: 649, costPrice: 330, stock: 55, emoji: "🌯" },
+    { category: "Burgerz", name: "Khan Wrap", subtitle: "Testing tasty", price: 900, costPrice: 480, stock: 40, emoji: "🍔" },
+    { category: "Burgerz", name: "Pizza Fajita", subtitle: "Fajita cheesy pizza", price: 820, costPrice: 430, stock: 30, emoji: "🍕" },
+    { category: "Fries Station", name: "Loaded Fries", subtitle: "Cheese fries with sauce", price: 450, costPrice: 210, stock: 70, emoji: "🍟" },
+    { category: "Special Food", name: "Alfredo Pasta", subtitle: "Creamy pasta", price: 980, costPrice: 520, stock: 25, emoji: "🍝", discount: "10% off" },
+    { category: "Karahi", name: "Chicken Karahi", subtitle: "Fresh karahi with spices", price: 1600, costPrice: 950, stock: 20, emoji: "🍲" },
+    { category: "Classic Food", name: "Chicken Biryani", subtitle: "Classic spicy biryani", price: 380, costPrice: 190, stock: 80, emoji: "🍛" }
   ];
 
   const items = rawItems.map((item, index) => ({
@@ -243,7 +242,7 @@ function defaultMenuForTenant(tenantId, branchId) {
     subtitle: item.subtitle || "",
     price: Number(item.price || 0),
     discount: item.discount || "",
-    emoji: item.emoji || "ðŸ½ï¸",
+    emoji: item.emoji || "🍽️",
     imageUrl: "",
     sku: `ITEM-${String(index + 1).padStart(3, "0")}`,
     isActive: true,
@@ -789,7 +788,7 @@ app.post("/api/menu/items", requireAuth, tenantOnly, (req, res) => {
     subtitle: subtitle || "",
     price: Number(price || 0),
     discount: discount || "",
-    emoji: emoji || "ðŸ½ï¸",
+    emoji: emoji || "🍽️",
     imageUrl: imageUrl || "",
     sku: sku || `ITEM-${Date.now()}`,
     isActive: true,
@@ -1466,94 +1465,7 @@ app.get('/api/health', async (req, res) => {
 
 initDb()
   .then(() => {
-    
-
-
-// =========================================================
-// PERFORMANCE TEST ROUTE - LIGHTWEIGHT REAL ORDER FLOW
-// Self-contained auth so it does not depend on authenticateToken position.
-// =========================================================
-app.post("/api/stress/order-flow", async (req, res) => {
-  try {
-    const jwt = require("jsonwebtoken");
-    const { randomUUID } = require("crypto");
-
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-
-    if (!token) {
-      return res.status(401).json({ message: "Token required." });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "nexapos-secret-key");
-
-    if (!decoded?.tenantId) {
-      return res.status(403).json({ message: "Restaurant account access required." });
-    }
-
-    const now = new Date().toISOString();
-
-    const order = {
-      id: randomUUID(),
-      tenantId: decoded.tenantId,
-      mode: req.body.mode || "delivery",
-      items: Array.isArray(req.body.items) && req.body.items.length
-        ? req.body.items
-        : [
-            {
-              id: "stress-zinger",
-              name: "Stress Test Zinger Burger",
-              category: "Burgers",
-              price: 650,
-              qty: 1,
-              quantity: 1
-            }
-          ],
-      customer: req.body.customer || {
-        firstName: "Stress",
-        lastName: "Customer",
-        address: "Stress Test Street Hyderabad"
-      },
-      phone: req.body.phone || "03001234567",
-      deliveryAddress: req.body.deliveryAddress || "Stress Test Street Hyderabad",
-      riderId: req.body.riderId || "stress-rider",
-      riderName: req.body.riderName || "Stress Rider",
-      subtotal: Number(req.body.subtotal || 650),
-      tax: Number(req.body.tax || 33),
-      total: Number(req.body.total || 683),
-      originalTotal: Number(req.body.originalTotal || 683),
-      paymentMethod: req.body.paymentMethod || "Cash on Delivery",
-      paymentStatus: req.body.paymentStatus || "unpaid",
-      orderStatus: req.body.orderStatus || "placed",
-      kitchenStatus: req.body.kitchenStatus || "placed",
-      orderInstructions: req.body.orderInstructions || "Lightweight stress order flow",
-      createdAt: now,
-      updatedAt: now,
-      kitchenStatusChangedAt: now
-    };
-
-    const saved = await createFastStressOrderRecord(order);
-
-    return res.status(201).json({
-      success: true,
-      message: "Stress order created.",
-      orderId: saved.id,
-      orderNo: saved.orderNo,
-      total: saved.total,
-      kitchenStatus: saved.kitchenStatus,
-      paymentStatus: saved.paymentStatus
-    });
-  } catch (error) {
-    console.error("Stress order flow error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to create stress order.",
-      error: error.message
-    });
-  }
-});
-
-app.listen(PORT, () => {
+    app.listen(PORT, () => {
       console.log(`NexaPOS Pro backend running on port ${PORT}`);
     });
   })
@@ -1561,9 +1473,3 @@ app.listen(PORT, () => {
     console.error("Failed to initialize database:", error);
     process.exit(1);
   });
-
-
-
-
-
-

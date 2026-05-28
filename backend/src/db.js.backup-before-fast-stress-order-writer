@@ -1341,62 +1341,6 @@ function cryptoRandomId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
-
-
-async function createFastStressOrderRecord(order) {
-  if (!isSupabaseMode()) {
-    order.orderNo = order.orderNo || getNextLocalOrderNumber(readDb(), order.tenantId);
-    return saveOrderRecord(order);
-  }
-
-  const client = await getPool().connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const counter = await client.query(
-      `
-        INSERT INTO nexa_order_counters (tenant_id, current_number, updated_at)
-        VALUES ($1, 1, NOW())
-        ON CONFLICT (tenant_id)
-        DO UPDATE SET current_number = nexa_order_counters.current_number + 1, updated_at = NOW()
-        RETURNING current_number
-      `,
-      [order.tenantId]
-    );
-
-    const now = new Date().toISOString();
-    const orderNo = order.orderNo || `#${String(Number(counter.rows[0]?.current_number || 1)).padStart(4, "0")}`;
-
-    const cleanOrder = {
-      ...order,
-      orderNo,
-      createdAt: order.createdAt || now,
-      updatedAt: order.updatedAt || now,
-      kitchenStatusChangedAt: order.kitchenStatusChangedAt || now
-    };
-
-    const saved = await upsertOrderWithClient(client, cleanOrder);
-
-    await client.query("COMMIT");
-
-    return {
-      id: saved.id,
-      tenantId: saved.tenantId,
-      orderNo: saved.orderNo,
-      total: saved.total,
-      paymentStatus: saved.paymentStatus,
-      kitchenStatus: saved.kitchenStatus,
-      createdAt: saved.createdAt
-    };
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
 module.exports = {
   initDb,
   readDb,
@@ -1413,11 +1357,8 @@ module.exports = {
   updateOrderRecord,
   getKdsSettingsRecord,
   saveKdsSettingsRecord,
-  addAuditLog,
-  createFastStressOrderRecord
+  addAuditLog
 };
-
-
 
 
 

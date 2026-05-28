@@ -24,8 +24,7 @@ const {
   updateOrderRecord,
   getKdsSettingsRecord,
   saveKdsSettingsRecord,
-  addAuditLog,
-  createFastStressOrderRecord
+  addAuditLog
 } = require("./db");
 const { signToken, hashPassword, comparePassword } = require("./auth");
 const { requireAuth, requireSuperAdmin } = require("./middleware");
@@ -1467,35 +1466,19 @@ app.get('/api/health', async (req, res) => {
 initDb()
   .then(() => {
     
-
-
 // =========================================================
 // PERFORMANCE TEST ROUTE - LIGHTWEIGHT REAL ORDER FLOW
-// Self-contained auth so it does not depend on authenticateToken position.
 // =========================================================
-app.post("/api/stress/order-flow", async (req, res) => {
+app.post("/api/stress/order-flow", authenticateToken, requireTenant, async (req, res) => {
   try {
-    const jwt = require("jsonwebtoken");
-    const { randomUUID } = require("crypto");
-
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-
-    if (!token) {
-      return res.status(401).json({ message: "Token required." });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "nexapos-secret-key");
-
-    if (!decoded?.tenantId) {
-      return res.status(403).json({ message: "Restaurant account access required." });
-    }
-
     const now = new Date().toISOString();
 
+    const orderNo = await getNextOrderNumberForTenant(req.user.tenantId);
+
     const order = {
-      id: randomUUID(),
-      tenantId: decoded.tenantId,
+      id: crypto.randomUUID(),
+      tenantId: req.user.tenantId,
+      orderNo,
       mode: req.body.mode || "delivery",
       items: Array.isArray(req.body.items) && req.body.items.length
         ? req.body.items
@@ -1532,7 +1515,7 @@ app.post("/api/stress/order-flow", async (req, res) => {
       kitchenStatusChangedAt: now
     };
 
-    const saved = await createFastStressOrderRecord(order);
+    const saved = await saveOrderRecord(order);
 
     return res.status(201).json({
       success: true,
@@ -1561,9 +1544,6 @@ app.listen(PORT, () => {
     console.error("Failed to initialize database:", error);
     process.exit(1);
   });
-
-
-
 
 
 

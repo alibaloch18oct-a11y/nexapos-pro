@@ -1,0 +1,73 @@
+﻿config:
+  target: "http://localhost:5000"
+  phases:
+  - duration: 60
+    arrivalRate: 1
+    name: "Tiny stability test"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+scenarios:
+  - name: "NexaPOS final SaaS order KDS flow"
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            username: "stressstable"
+            password: "stressstable123"
+          capture:
+            - json: "$.token"
+              as: "token"
+
+      - get:
+          url: "/api/client/dashboard"
+          headers:
+            Authorization: "Bearer {{ token }}"
+
+      - get:
+          url: "/api/menu"
+          headers:
+            Authorization: "Bearer {{ token }}"
+
+      - post:
+          url: "/api/orders"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          json:
+            mode: "delivery"
+            items:
+              - id: "stress-zinger"
+                name: "Stress Test Zinger Burger"
+                category: "Burgers"
+                price: 650
+                qty: 1
+                quantity: 1
+            customer:
+              firstName: "Stress"
+              lastName: "Customer"
+              address: "Stress Test Street Hyderabad"
+            phone: "03001234567"
+            deliveryAddress: "Stress Test Street Hyderabad"
+            riderId: "stress-rider"
+            riderName: "Stress Rider"
+            subtotal: 650
+            tax: 33
+            total: 683
+            originalTotal: 683
+            paymentMethod: "Cash on Delivery"
+            paymentStatus: "unpaid"
+            orderStatus: "placed"
+            kitchenStatus: "placed"
+            orderInstructions: "Final database stress test"
+
+      - get:
+          url: "/api/orders?limit=50"
+          headers:
+            Authorization: "Bearer {{ token }}"
+
+      - get:
+          url: "/api/kds-auto/board"
+          headers:
+            Authorization: "Bearer {{ token }}"

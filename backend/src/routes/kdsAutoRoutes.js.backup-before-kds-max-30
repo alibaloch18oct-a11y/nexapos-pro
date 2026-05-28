@@ -241,7 +241,7 @@ module.exports = function kdsAutoRoutes({
 
       const orders = rawOrders
         .filter(visibleKitchenOrder)
-        .slice(0, 30)
+        .slice(0, 80)
         .map((order) => {
           const status = normalizeStatus(order);
           const previewNextStatus = nextAutoStatus(order, settings);
@@ -376,4 +376,3 @@ module.exports = function kdsAutoRoutes({
 
   return router;
 };
-

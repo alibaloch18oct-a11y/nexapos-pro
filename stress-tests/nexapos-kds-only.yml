@@ -1,0 +1,26 @@
+﻿config:
+  target: "http://localhost:5000"
+  phases:
+    - duration: 60
+      arrivalRate: 2
+      name: "KDS read only 2/sec"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+scenarios:
+  - name: "KDS read only"
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            username: "stressstable"
+            password: "stressstable123"
+          capture:
+            - json: "$.token"
+              as: "token"
+
+      - get:
+          url: "/api/kds-auto/board"
+          headers:
+            Authorization: "Bearer {{ token }}"

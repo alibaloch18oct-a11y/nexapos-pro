@@ -12,21 +12,6 @@ let memoryDb = null;
 let initialized = false;
 let writeQueue = Promise.resolve();
 
-process.on("unhandledRejection", (error) => {
-  console.error("Unhandled promise rejection:", error?.message || error);
-});
-
-process.on("uncaughtException", (error) => {
-  console.error("Uncaught exception:", error?.message || error);
-
-  // Do not crash the POS server for transient PostgreSQL socket drops.
-  if (String(error?.message || "").includes("Connection terminated unexpectedly")) {
-    return;
-  }
-
-  throw error;
-});
-
 function initialData() {
   return {
     tenants: [],
@@ -117,22 +102,10 @@ function getPool() {
     pool = new Pool({
       connectionString: DATABASE_URL,
       ssl: { rejectUnauthorized: false },
-      max: Number(process.env.PG_POOL_MAX || 6),
-      idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS || 8000),
-      connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS || 45000),
-      allowExitOnIdle: true,
-      keepAlive: true,
-      keepAliveInitialDelayMillis: 10000
-    });
-
-    pool.on("error", (error) => {
-      console.error("PostgreSQL pool idle client error:", error.message);
-    });
-
-    pool.on("connect", (client) => {
-      client.on("error", (error) => {
-        console.error("PostgreSQL client connection error:", error.message);
-      });
+      max: Number(process.env.PG_POOL_MAX || 8),
+      idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS || 10000),
+      connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS || 30000),
+      allowExitOnIdle: true
     });
   }
 
@@ -1341,62 +1314,6 @@ function cryptoRandomId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
-
-
-async function createFastStressOrderRecord(order) {
-  if (!isSupabaseMode()) {
-    order.orderNo = order.orderNo || getNextLocalOrderNumber(readDb(), order.tenantId);
-    return saveOrderRecord(order);
-  }
-
-  const client = await getPool().connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const counter = await client.query(
-      `
-        INSERT INTO nexa_order_counters (tenant_id, current_number, updated_at)
-        VALUES ($1, 1, NOW())
-        ON CONFLICT (tenant_id)
-        DO UPDATE SET current_number = nexa_order_counters.current_number + 1, updated_at = NOW()
-        RETURNING current_number
-      `,
-      [order.tenantId]
-    );
-
-    const now = new Date().toISOString();
-    const orderNo = order.orderNo || `#${String(Number(counter.rows[0]?.current_number || 1)).padStart(4, "0")}`;
-
-    const cleanOrder = {
-      ...order,
-      orderNo,
-      createdAt: order.createdAt || now,
-      updatedAt: order.updatedAt || now,
-      kitchenStatusChangedAt: order.kitchenStatusChangedAt || now
-    };
-
-    const saved = await upsertOrderWithClient(client, cleanOrder);
-
-    await client.query("COMMIT");
-
-    return {
-      id: saved.id,
-      tenantId: saved.tenantId,
-      orderNo: saved.orderNo,
-      total: saved.total,
-      paymentStatus: saved.paymentStatus,
-      kitchenStatus: saved.kitchenStatus,
-      createdAt: saved.createdAt
-    };
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
 module.exports = {
   initDb,
   readDb,
@@ -1413,12 +1330,8 @@ module.exports = {
   updateOrderRecord,
   getKdsSettingsRecord,
   saveKdsSettingsRecord,
-  addAuditLog,
-  createFastStressOrderRecord
+  addAuditLog
 };
-
-
-
 
 
 
