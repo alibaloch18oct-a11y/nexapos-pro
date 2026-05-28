@@ -7,6 +7,7 @@ import LoginPage from "./components/LoginPage";
 import TopBar from "./components/TopBar";
 import SuperAdminDashboard from "./components/SuperAdminDashboard";
 import ClientDashboard from "./components/ClientDashboard";
+import RoleAwareDashboard from "./components/RoleAwareDashboard";
 import POSScreen from "./components/POSScreen";
 import OrdersPanel from "./components/OrdersPanel";
 import KDSPanel from "./components/KDSPanel";
@@ -15,10 +16,12 @@ import MenuAdminPanel from "./components/MenuAdminPanel";
 import InventoryPanel from "./components/InventoryPanel";
 import DiscountPanel from "./components/DiscountPanel";
 import StaffPanel from "./components/StaffPanel";
+import BranchStaffPanel from "./components/BranchStaffPanel";
 import RestaurantSettingsPanel from "./components/RestaurantSettingsPanel";
 import PackageBuilderPanel from "./components/PackageBuilderPanel";
 import SubscriptionPanel from "./components/SubscriptionPanel";
 import AnalyticsPanel from "./components/AnalyticsPanel";
+import BranchReportsPanel from "./components/BranchReportsPanel";
 import StockMovementPanel from "./components/StockMovementPanel";
 import MenuInventoryMappingPanel from "./components/MenuInventoryMappingPanel";
 import SupplierPurchasePanel from "./components/SupplierPurchasePanel";
@@ -73,7 +76,8 @@ function App() {
   const [activeModule, setActiveModule] = useState(null);
   const [subscriptionLock, setSubscriptionLock] = useState(null);
 
-  async function refreshSession() {
+    const [roleContext, setRoleContext] = useState(null);
+async function refreshSession() {
     const savedToken = localStorage.getItem("nexapos_token");
 
     if (!savedToken) {
@@ -110,6 +114,7 @@ function App() {
     setToken(data.token);
     setSession(data);
     setSubscriptionLock(null);
+    setRoleContext(null);
   }
 
   function logout() {
@@ -118,6 +123,7 @@ function App() {
     setSession(null);
     setActiveModule(null);
     setSubscriptionLock(null);
+    setRoleContext(null);
   }
 
   function closeModule() {
@@ -138,6 +144,17 @@ function App() {
 
   if (!session) return <LoginPage onLogin={onLogin} />;
 
+  const branchAwareSession = {
+    ...session,
+    roleContext: {
+      ...(roleContext || {}),
+      activeBranch: activeModule?.branch || roleContext?.activeBranch || null,
+      branchMode: activeModule?.branchMode || roleContext?.branchMode || "single"
+    },
+    activeBranchId: activeModule?.branchId || "",
+    activeBranchName: activeModule?.branch?.name || ""
+  };
+
   if (activeModule?.key === "super_packages") {
     return <PackageBuilderPanel token={token} onBack={closeModule} />;
   }
@@ -150,7 +167,7 @@ function App() {
     return (
       <DriveThruPanel
         token={token}
-        session={session}
+        session={branchAwareSession}
         onBack={closeModule}
         onOpenPOS={(ticket) =>
           setActiveModule({
@@ -165,11 +182,11 @@ function App() {
   }
 
   if (activeModule?.key === "customers" || activeModule?.key === "loyalty") {
-    return <CustomerPanel token={token} session={session} onBack={closeModule} />;
+    return <CustomerPanel token={token} session={branchAwareSession} onBack={closeModule} />;
   }
 
   if (activeModule?.key === "expenses" || activeModule?.key === "expense_management") {
-    return <ExpensePanel token={token} session={session} onBack={closeModule} />;
+    return <ExpensePanel token={token} session={branchAwareSession} onBack={closeModule} />;
   }
 
   if (
@@ -177,7 +194,25 @@ function App() {
     activeModule?.key === "reports" ||
     activeModule?.key === "profit_loss"
   ) {
-    return <AnalyticsPanel token={token} session={session} onBack={closeModule} />;
+    if (session?.user?.role !== "super_admin") {
+      return (
+        <BranchReportsPanel
+          token={token}
+          session={branchAwareSession}
+          roleContext={{
+            ...(roleContext || {}),
+            activeBranch: activeModule?.branch || roleContext?.activeBranch || null,
+            branchMode: activeModule?.branchMode || roleContext?.branchMode || "single"
+          }}
+          activeBranchId={activeModule?.branchId || ""}
+          activeBranchName={activeModule?.branch?.name || ""}
+          branchMode={activeModule?.branchMode || "single"}
+          onBack={closeModule}
+        />
+      );
+    }
+
+    return <AnalyticsPanel token={token} session={branchAwareSession} onBack={closeModule} />;
   }
 
   if (
@@ -185,33 +220,57 @@ function App() {
     activeModule?.key === "suppliers" ||
     activeModule?.key === "purchase_stock"
   ) {
-    return <SupplierPurchasePanel token={token} session={session} onBack={closeModule} />;
+    return <SupplierPurchasePanel token={token} session={branchAwareSession} onBack={closeModule} />;
   }
 
   if (
     activeModule?.key === "menu_inventory_mapping" ||
     activeModule?.key === "recipe_mapping"
   ) {
-    return <MenuInventoryMappingPanel token={token} session={session} onBack={closeModule} />;
+    return <MenuInventoryMappingPanel token={token} session={branchAwareSession} onBack={closeModule} />;
   }
 
   if (
     activeModule?.key === "stock_movements" ||
     activeModule?.key === "stock_history"
   ) {
-    return <StockMovementPanel token={token} session={session} onBack={closeModule} />;
+    return <StockMovementPanel token={token} session={branchAwareSession} onBack={closeModule} />;
   }
 
   if (activeModule?.key === "orders") {
-    return <OrdersPanel token={token} onBack={closeModule} />;
+    return (
+      <OrdersPanel
+        token={token}
+        session={branchAwareSession}
+        roleContext={roleContext}
+        activeModuleBranchId={activeModule?.branchId || ""}
+        activeModuleBranchName={activeModule?.branch?.name || ""}
+        activeModuleBranchMode={activeModule?.branchMode || "single"}
+        onBack={closeModule}
+      />
+    );
   }
 
   if (activeModule?.key === "kds") {
-    return <KDSPanel token={token} onBack={closeModule} />;
+    return (
+      <KDSPanel
+        token={token}
+        session={branchAwareSession}
+        roleContext={{
+          ...(roleContext || {}),
+          activeBranch: activeModule?.branch || roleContext?.activeBranch || null,
+          branchMode: activeModule?.branchMode || roleContext?.branchMode || "single"
+        }}
+        activeModuleBranchId={activeModule?.branchId || ""}
+        activeModuleBranchName={activeModule?.branch?.name || ""}
+        activeModuleBranchMode={activeModule?.branchMode || "single"}
+        onBack={closeModule}
+      />
+    );
   }
 
   if (activeModule?.key === "settings") {
-    return <MenuAdminPanel token={token} session={session} onBack={closeModule} />;
+    return <MenuAdminPanel token={token} session={branchAwareSession} onBack={closeModule} />;
   }
 
   if (
@@ -219,32 +278,31 @@ function App() {
     activeModule?.key === "branding" ||
     activeModule?.key === "receipt_settings"
   ) {
-    return <RestaurantSettingsPanel token={token} session={session} onBack={closeModule} />;
+    return <RestaurantSettingsPanel token={token} session={branchAwareSession} onBack={closeModule} />;
   }
 
   if (activeModule?.key === "inventory") {
-    return <InventoryPanel token={token} session={session} onBack={closeModule} />;
+    return <InventoryPanel token={token} session={branchAwareSession} onBack={closeModule} />;
   }
 
   if (activeModule?.key === "discounts" || activeModule?.key === "discount") {
-    return <DiscountPanel token={token} session={session} onBack={closeModule} />;
+    return <DiscountPanel token={token} session={branchAwareSession} onBack={closeModule} />;
   }
 
   if (
     activeModule?.key === "staff" ||
     activeModule?.key === "waiters" ||
     activeModule?.key === "riders" ||
-    activeModule?.key === "cashier" ||
     activeModule?.key === "attendance"
   ) {
-    return <StaffPanel token={token} session={session} onBack={closeModule} />;
+    return <BranchStaffPanel token={token} session={branchAwareSession} roleContext={roleContext} onBack={closeModule} />;
   }
 
   if (activeModule?.key === "dine_in") {
     return (
       <DineInTableLayout
         token={token}
-        session={session}
+        session={branchAwareSession}
         onBack={closeModule}
         onOpenOrder={(table) =>
           setActiveModule({
@@ -263,7 +321,7 @@ function App() {
       <POSScreen
         token={token}
         module={activeModule}
-        session={session}
+        session={{ ...session, roleContext }}
         onBack={() => setActiveModule({ key: "dine_in", name: "Dine In" })}
       />
     );
@@ -274,20 +332,21 @@ function App() {
     activeModule?.key === "kiosk" ||
     activeModule?.key === "take_away" ||
     activeModule?.key === "delivery" ||
-    activeModule?.key === "drive_thru"
+    activeModule?.key === "drive_thru" ||
+    activeModule?.key === "cashier"
   ) {
     return (
       <POSScreen
         token={token}
         module={activeModule}
-        session={session}
+        session={{ ...session, roleContext }}
         onBack={closeModule}
       />
     );
   }
 
   if (activeModule && posModuleKeys.includes(activeModule.key)) {
-    return <POSScreen token={token} module={activeModule} session={session} onBack={closeModule} />;
+    return <POSScreen token={token} module={activeModule} session={{ ...session, roleContext }} onBack={closeModule} />;
   }
 
   return (
@@ -301,10 +360,11 @@ function App() {
           onOpenModule={setActiveModule}
         />
       ) : (
-        <ClientDashboard
+        <RoleAwareDashboard
           token={token}
           session={session}
           onOpenModule={setActiveModule}
+          onRoleContext={setRoleContext}
         />
       )}
     </div>
@@ -312,6 +372,23 @@ function App() {
 }
 
 export default App;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

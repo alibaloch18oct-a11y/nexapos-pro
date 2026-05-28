@@ -1,0 +1,688 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Bike,
+  ChefHat,
+  CheckCircle2,
+  ChevronLeft,
+  Clock3,
+  Flame,
+  PackageCheck,
+  RefreshCw,
+  Search,
+  Timer,
+  Truck,
+  UserCheck,
+  Utensils,
+  Volume2,
+  VolumeX,
+  BellRing
+} from "lucide-react";
+import { api } from "../lib/api";
+
+function normalizeMode(mode) {
+  const map = {
+    dine_in: "Dine In",
+    take_away: "Take Away",
+    delivery: "Delivery",
+    drive_thru: "Drive Thru",
+    walk_in: "Walk In",
+    kiosk: "Kiosk"
+  };
+
+  return map[mode] || mode || "POS";
+}
+
+function statusLabel(status) {
+  const map = {
+    placed: "New",
+    new: "New",
+    preparing: "Preparing",
+    ready: "Ready",
+    served: "Served",
+    completed: "Served",
+    cancelled: "Cancelled",
+    unconfirmed: "Unconfirmed"
+  };
+
+  return map[status] || status || "New";
+}
+
+function statusTone(status) {
+  if (status === "placed" || status === "new" || status === "unconfirmed") {
+    return {
+      color: "#a5f3fc",
+      bg: "rgba(34,211,238,.12)",
+      border: "rgba(34,211,238,.26)",
+      glow: "rgba(34,211,238,.24)"
+    };
+  }
+
+  if (status === "preparing") {
+    return {
+      color: "#fde68a",
+      bg: "rgba(250,204,21,.12)",
+      border: "rgba(250,204,21,.26)",
+      glow: "rgba(250,204,21,.22)"
+    };
+  }
+
+  if (status === "ready") {
+    return {
+      color: "#86efac",
+      bg: "rgba(34,197,94,.12)",
+      border: "rgba(34,197,94,.26)",
+      glow: "rgba(34,197,94,.22)"
+    };
+  }
+
+  if (status === "served" || status === "completed") {
+    return {
+      color: "#c4b5fd",
+      bg: "rgba(168,85,247,.12)",
+      border: "rgba(168,85,247,.26)",
+      glow: "rgba(168,85,247,.20)"
+    };
+  }
+
+  return {
+    color: "#cbd5e1",
+    bg: "rgba(255,255,255,.08)",
+    border: "rgba(255,255,255,.12)",
+    glow: "rgba(255,255,255,.12)"
+  };
+}
+
+function getMinutesAgo(value) {
+  if (!value) return 0;
+
+  const createdAt = new Date(value).getTime();
+  const now = Date.now();
+
+  if (Number.isNaN(createdAt)) return 0;
+
+  return Math.max(0, Math.floor((now - createdAt) / 60000));
+}
+
+function money(order, value) {
+  return `${order?.currency || order?.restaurantSettings?.currency || "Rs"} ${Math.round(Number(value || 0)).toLocaleString()}`;
+}
+
+function ModeIcon({ mode }) {
+  if (mode === "dine_in") return <Utensils size={16} />;
+  if (mode === "delivery") return <Bike size={16} />;
+  if (mode === "drive_thru") return <Truck size={16} />;
+  return <PackageCheck size={16} />;
+}
+
+function playKitchenBeep() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new AudioContext();
+
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+    oscillator.frequency.setValueAtTime(660, audioContext.currentTime + 0.12);
+    oscillator.frequency.setValueAtTime(880, audioContext.currentTime + 0.24);
+
+    gainNode.gain.setValueAtTime(0.0001, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.22, audioContext.currentTime + 0.02);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.42);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.45);
+  } catch {
+    // Browser blocked audio or AudioContext unavailable.
+  }
+}
+
+function KDSOrderCard({ order, onUpdateStatus, isFresh }) {
+  const currentStatus = order.kitchenStatus || order.orderStatus || "placed";
+  const tone = statusTone(currentStatus);
+  const items = Array.isArray(order.items) ? order.items : [];
+  const minutesAgo = getMinutesAgo(order.createdAt || order.date);
+  const customerName = `${order?.customer?.firstName || ""} ${order?.customer?.lastName || ""}`.trim();
+
+  return (
+    <div
+      style={{
+        borderRadius: 26,
+        border: `1px solid ${isFresh ? "#fde68a" : tone.border}`,
+        background: `
+          radial-gradient(circle at top left, ${isFresh ? "rgba(250,204,21,.18)" : tone.bg}, transparent 36%),
+          rgba(15,23,42,.88)
+        `,
+        padding: 14,
+        boxShadow: isFresh
+          ? "0 0 0 1px rgba(250,204,21,.18), 0 22px 70px rgba(250,204,21,.16)"
+          : "0 18px 48px rgba(0,0,0,.28)",
+        animation: isFresh ? "kdsPulse 1.15s ease-in-out infinite" : "none"
+      }}
+    >
+      <style>
+        {`
+          @keyframes kdsPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.01); }
+            100% { transform: scale(1); }
+          }
+        `}
+      </style>
+
+      <div className="nexa-row-between">
+        <div>
+          <h3 style={{ margin: 0, fontSize: 20, display: "flex", alignItems: "center", gap: 8 }}>
+            {isFresh ? <BellRing size={20} color="#fde68a" /> : null}
+            {order.orderNo || "Kitchen Order"}
+          </h3>
+          <p className="nexa-small">
+            {new Date(order.createdAt || order.date || Date.now()).toLocaleString()}
+          </p>
+        </div>
+
+        <div
+          style={{
+            width: 54,
+            height: 54,
+            borderRadius: 20,
+            display: "grid",
+            placeItems: "center",
+            background: tone.bg,
+            color: tone.color,
+            border: `1px solid ${tone.border}`
+          }}
+        >
+          {currentStatus === "ready" ? <CheckCircle2 size={28} /> : currentStatus === "preparing" ? <Flame size={28} /> : <ChefHat size={28} />}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+        <div className="nexa-pill" style={{ color: tone.color }}>
+          {statusLabel(currentStatus)}
+        </div>
+
+        <div className="nexa-pill">
+          <ModeIcon mode={order.mode} /> {normalizeMode(order.mode)}
+        </div>
+
+        <div className="nexa-pill">
+          <Timer size={14} /> {minutesAgo} min
+        </div>
+
+        {order.table?.name ? (
+          <div className="nexa-pill">Table {order.table.name}</div>
+        ) : null}
+
+        {isFresh ? (
+          <div className="nexa-pill" style={{ color: "#fde68a" }}>
+            New Alert
+          </div>
+        ) : null}
+      </div>
+
+      <div
+        style={{
+          marginTop: 12,
+          padding: 12,
+          borderRadius: 18,
+          border: "1px solid rgba(255,255,255,.10)",
+          background: "rgba(2,6,23,.42)"
+        }}
+      >
+        {items.length === 0 ? (
+          <p className="nexa-section-sub">No items found.</p>
+        ) : (
+          <div style={{ display: "grid", gap: 9 }}>
+            {items.map((item, index) => {
+              const qty = Number(item.qty || item.quantity || 1);
+
+              return (
+                <div
+                  key={`${item.id || item.name}-${index}`}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "42px 1fr auto",
+                    gap: 10,
+                    alignItems: "center",
+                    borderBottom: index === items.length - 1 ? "0" : "1px solid rgba(255,255,255,.08)",
+                    paddingBottom: index === items.length - 1 ? 0 : 9
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 14,
+                      display: "grid",
+                      placeItems: "center",
+                      background: "rgba(34,211,238,.12)",
+                      color: "#a5f3fc",
+                      fontWeight: 950
+                    }}
+                  >
+                    {qty}
+                  </div>
+
+                  <div>
+                    <strong>{item.name}</strong>
+                    <p className="nexa-small">{item.category || item.subtitle || "Menu Item"}</p>
+                  </div>
+
+                  <strong>{money(order, Number(item.price || 0) * qty)}</strong>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {(order.orderInstructions || customerName || order.phone) ? (
+        <div
+          style={{
+            marginTop: 12,
+            padding: 11,
+            borderRadius: 16,
+            background: "rgba(255,255,255,.055)",
+            border: "1px solid rgba(255,255,255,.09)"
+          }}
+        >
+          {customerName ? <p className="nexa-small">Customer: {customerName}</p> : null}
+          {order.phone ? <p className="nexa-small">Phone: {order.phone}</p> : null}
+          {order.orderInstructions ? (
+            <p style={{ margin: 0, color: "#fde68a", fontWeight: 850 }}>
+              Note: {order.orderInstructions}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 12 }}>
+        {order.waiterName ? (
+          <div className="nexa-pill">
+            <UserCheck size={14} /> {order.waiterName}
+          </div>
+        ) : null}
+
+        {order.riderName ? (
+          <div className="nexa-pill">
+            <Bike size={14} /> {order.riderName}
+          </div>
+        ) : null}
+
+        {order.cashierName ? (
+          <div className="nexa-pill">
+            <ChefHat size={14} /> {order.cashierName}
+          </div>
+        ) : null}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginTop: 14 }}>
+        <button
+          className="nexa-pill"
+          onClick={() => onUpdateStatus(order, "placed")}
+          style={{ background: currentStatus === "placed" || currentStatus === "new" ? "rgba(34,211,238,.20)" : "rgba(255,255,255,.08)" }}
+        >
+          New
+        </button>
+
+        <button
+          className="nexa-pill"
+          onClick={() => onUpdateStatus(order, "preparing")}
+          style={{ background: currentStatus === "preparing" ? "rgba(250,204,21,.20)" : "rgba(255,255,255,.08)" }}
+        >
+          Preparing
+        </button>
+
+        <button
+          className="nexa-pill"
+          onClick={() => onUpdateStatus(order, "ready")}
+          style={{ background: currentStatus === "ready" ? "rgba(34,197,94,.20)" : "rgba(255,255,255,.08)" }}
+        >
+          Ready
+        </button>
+
+        <button
+          className="nexa-create-btn"
+          onClick={() => onUpdateStatus(order, "served")}
+          style={{ justifyContent: "center" }}
+        >
+          Served
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function KDSPanel({ token, onBack }) {
+  const [orders, setOrders] = useState([]);
+  const [freshOrderIds, setFreshOrderIds] = useState([]);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("active");
+  const [modeFilter, setModeFilter] = useState("all");
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [lastRefreshAt, setLastRefreshAt] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const knownOrderIdsRef = useRef(new Set());
+  const initialLoadDoneRef = useRef(false);
+
+  function orderKey(order) {
+    return order.id || order.orderNo || `${order.createdAt}-${order.phone}`;
+  }
+
+  async function loadOrders({ silent = false } = {}) {
+    if (!silent) setLoading(true);
+
+    try {
+      const res = await api(token).get("/api/orders");
+      const list = Array.isArray(res.data) ? res.data : res.data.orders || [];
+
+      const kitchenOrders = list
+        .filter((order) => ["paid", "unpaid", "complimentary"].includes(order.paymentStatus))
+        .filter((order) => !["cancelled"].includes(order.orderStatus))
+        .sort((a, b) => new Date(a.createdAt || a.date) - new Date(b.createdAt || b.date));
+
+      const nextIds = new Set(kitchenOrders.map(orderKey));
+
+      if (initialLoadDoneRef.current) {
+        const newIds = kitchenOrders
+          .map(orderKey)
+          .filter((id) => !knownOrderIdsRef.current.has(id));
+
+        if (newIds.length > 0) {
+          setFreshOrderIds((prev) => [...new Set([...prev, ...newIds])]);
+
+          if (soundEnabled) {
+            playKitchenBeep();
+
+            setTimeout(() => {
+              playKitchenBeep();
+            }, 650);
+          }
+
+          setTimeout(() => {
+            setFreshOrderIds((prev) => prev.filter((id) => !newIds.includes(id)));
+          }, 18000);
+        }
+      }
+
+      knownOrderIdsRef.current = nextIds;
+      initialLoadDoneRef.current = true;
+
+      setOrders(kitchenOrders);
+      setLastRefreshAt(new Date().toLocaleTimeString());
+    } catch (error) {
+      if (!silent) {
+        alert(error.response?.data?.message || "Failed to load kitchen orders.");
+      }
+      setOrders((prev) => prev);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  useEffect(() => {
+    if (!autoRefreshEnabled) return;
+
+    const interval = setInterval(() => {
+      loadOrders({ silent: true });
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [autoRefreshEnabled, soundEnabled]);
+
+  async function updateOrderStatus(order, nextStatus) {
+    try {
+      const payload = {
+        kitchenStatus: nextStatus,
+        orderStatus: nextStatus === "served" ? "served" : order.orderStatus || "placed"
+      };
+
+      await api(token).patch(`/api/orders/${order.id}`, payload);
+
+      setFreshOrderIds((prev) => prev.filter((id) => id !== orderKey(order)));
+
+      setOrders((prev) =>
+        prev.map((item) =>
+          item.id === order.id
+            ? {
+                ...item,
+                kitchenStatus: nextStatus,
+                orderStatus: payload.orderStatus,
+                updatedAt: new Date().toISOString()
+              }
+            : item
+        )
+      );
+    } catch (error) {
+      try {
+        await api(token).put(`/api/orders/${order.id}/status`, {
+          kitchenStatus: nextStatus,
+          orderStatus: nextStatus === "served" ? "served" : order.orderStatus || "placed"
+        });
+
+        setFreshOrderIds((prev) => prev.filter((id) => id !== orderKey(order)));
+
+        setOrders((prev) =>
+          prev.map((item) =>
+            item.id === order.id
+              ? {
+                  ...item,
+                  kitchenStatus: nextStatus,
+                  orderStatus: nextStatus === "served" ? "served" : item.orderStatus,
+                  updatedAt: new Date().toISOString()
+                }
+              : item
+          )
+        );
+      } catch (fallbackError) {
+        alert(fallbackError.response?.data?.message || error.response?.data?.message || "Failed to update kitchen status.");
+      }
+    }
+  }
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      const query = search.toLowerCase();
+      const kitchenStatus = order.kitchenStatus || order.orderStatus || "placed";
+
+      const customerName = `${order?.customer?.firstName || ""} ${order?.customer?.lastName || ""}`.trim();
+
+      const bySearch =
+        !search ||
+        String(order.orderNo || "").toLowerCase().includes(query) ||
+        String(order.phone || "").toLowerCase().includes(query) ||
+        String(customerName || "").toLowerCase().includes(query) ||
+        String(order.waiterName || "").toLowerCase().includes(query) ||
+        String(order.riderName || "").toLowerCase().includes(query) ||
+        String(order.mode || "").toLowerCase().includes(query) ||
+        (Array.isArray(order.items) &&
+          order.items.some((item) => String(item.name || "").toLowerCase().includes(query)));
+
+      const byMode = modeFilter === "all" || order.mode === modeFilter;
+
+      const byStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" && !["served", "completed"].includes(kitchenStatus)) ||
+        kitchenStatus === statusFilter ||
+        (statusFilter === "placed" && kitchenStatus === "new") ||
+        (statusFilter === "placed" && kitchenStatus === "unconfirmed");
+
+      return bySearch && byMode && byStatus;
+    });
+  }, [orders, search, statusFilter, modeFilter]);
+
+  const stats = {
+    newOrders: orders.filter((order) => ["placed", "new", "unconfirmed"].includes(order.kitchenStatus || order.orderStatus || "placed")).length,
+    preparing: orders.filter((order) => (order.kitchenStatus || order.orderStatus) === "preparing").length,
+    ready: orders.filter((order) => (order.kitchenStatus || order.orderStatus) === "ready").length,
+    served: orders.filter((order) => ["served", "completed"].includes(order.kitchenStatus || order.orderStatus)).length,
+    fresh: freshOrderIds.length
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", padding: 18 }}>
+      <div className="nexa-row-between">
+        <div>
+          <button className="nexa-logout" onClick={onBack}>
+            <ChevronLeft size={18} /> Back
+          </button>
+          <h1 className="nexa-section-title" style={{ marginTop: 16 }}>
+            Kitchen Display System
+          </h1>
+          <p className="nexa-section-sub">
+            Auto-refreshing kitchen workflow with sound alert for new orders.
+          </p>
+        </div>
+
+        <div style={{ display: "flex", gap: 9, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <button
+            className="nexa-pill"
+            onClick={() => {
+              setSoundEnabled((prev) => !prev);
+
+              if (!soundEnabled) {
+                playKitchenBeep();
+              }
+            }}
+            style={{
+              background: soundEnabled ? "rgba(34,197,94,.16)" : "rgba(239,68,68,.12)"
+            }}
+          >
+            {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            Sound {soundEnabled ? "On" : "Off"}
+          </button>
+
+          <button
+            className="nexa-pill"
+            onClick={() => setAutoRefreshEnabled((prev) => !prev)}
+            style={{
+              background: autoRefreshEnabled ? "rgba(34,211,238,.16)" : "rgba(255,255,255,.08)"
+            }}
+          >
+            <Clock3 size={16} />
+            Auto {autoRefreshEnabled ? "On" : "Off"}
+          </button>
+
+          <button className="nexa-create-btn" onClick={() => loadOrders()}>
+            <RefreshCw size={16} /> Refresh Orders
+          </button>
+        </div>
+      </div>
+
+      <div className="nexa-stats">
+        {[
+          ["New Orders", stats.newOrders, ChefHat, "#a5f3fc"],
+          ["Preparing", stats.preparing, Flame, "#fde68a"],
+          ["Ready", stats.ready, CheckCircle2, "#86efac"],
+          ["Served", stats.served, PackageCheck, "#c4b5fd"],
+          ["New Alerts", stats.fresh, BellRing, "#fde68a"]
+        ].map(([label, value, Icon, color]) => (
+          <div className="nexa-stat-card" key={label}>
+            <Icon color={color} size={30} />
+            <p className="nexa-stat-label">{label}</p>
+            <p className="nexa-stat-value">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      <section className="nexa-panel">
+        <div className="nexa-row-between" style={{ marginBottom: 14 }}>
+          <div>
+            <h2 style={{ margin: 0 }}>Kitchen Orders</h2>
+            <p className="nexa-section-sub">
+              {filteredOrders.length} orders showing · Last refresh: {lastRefreshAt || "Not refreshed yet"}
+            </p>
+          </div>
+
+          <div className="nexa-input-wrap" style={{ minWidth: 310 }}>
+            <Search size={16} color="#a5f3fc" />
+            <input
+              className="nexa-input"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search order, item, phone..."
+            />
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          {[
+            ["active", "Active"],
+            ["all", "All"],
+            ["placed", "New"],
+            ["preparing", "Preparing"],
+            ["ready", "Ready"],
+            ["served", "Served"]
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              className="nexa-pill"
+              onClick={() => setStatusFilter(key)}
+              style={{
+                background: statusFilter === key ? "rgba(34,211,238,.20)" : "rgba(255,255,255,.08)"
+              }}
+            >
+              {label}
+            </button>
+          ))}
+
+          <div style={{ width: 1, background: "rgba(255,255,255,.16)", margin: "0 5px" }} />
+
+          {[
+            ["all", "All Modes"],
+            ["dine_in", "Dine In"],
+            ["take_away", "Take Away"],
+            ["delivery", "Delivery"],
+            ["drive_thru", "Drive Thru"]
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              className="nexa-pill"
+              onClick={() => setModeFilter(key)}
+              style={{
+                background: modeFilter === key ? "rgba(168,85,247,.20)" : "rgba(255,255,255,.08)"
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign: "center", color: "#94a3b8", padding: 44 }}>
+            <ChefHat size={58} />
+            <h3>Loading kitchen orders...</h3>
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          <div style={{ textAlign: "center", color: "#94a3b8", padding: 44 }}>
+            <ChefHat size={58} />
+            <h3>No kitchen orders found</h3>
+            <p>Create orders from POS to show here.</p>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 14 }}>
+            {filteredOrders.map((order) => (
+              <KDSOrderCard
+                key={orderKey(order)}
+                order={order}
+                isFresh={freshOrderIds.includes(orderKey(order))}
+                onUpdateStatus={updateOrderStatus}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

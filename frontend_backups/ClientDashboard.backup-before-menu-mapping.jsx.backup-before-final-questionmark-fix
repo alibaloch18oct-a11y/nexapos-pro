@@ -1,0 +1,185 @@
+﻿import React, { useEffect, useState } from "react";
+import {
+  AlertTriangle,
+  BadgePercent,
+  BarChart3,
+  Boxes,
+  Building2,
+  ChefHat,
+  ChevronRight,
+  CircleDollarSign,
+  History,
+  Link2,
+  ReceiptText,
+  Sparkles,
+  Users,
+  Utensils
+} from "lucide-react";
+import { api } from "../lib/api";
+import { iconMap, posModuleKeys } from "../lib/data";
+
+export default function ClientDashboard({ token, session, onOpenModule }) {
+  const enabledModules = session.modules || [];
+  const [stats, setStats] = useState({
+    todaySales: 0,
+    todayOrders: 0,
+    activeTables: 0,
+    pendingKitchenOrders: 0,
+    lowStockItems: 0,
+    activeStaff: 0
+  });
+
+  async function loadStats() {
+    try {
+      const res = await api(token).get("/api/client/dashboard");
+      setStats(res.data.stats);
+    } catch {
+      setStats({
+        todaySales: 0,
+        todayOrders: 0,
+        activeTables: 0,
+        pendingKitchenOrders: 0,
+        lowStockItems: 0,
+        activeStaff: 0
+      });
+    }
+  }
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  const quickAdminModules = [
+    {
+      key: "analytics",
+      name: "Analytics",
+      description: "Profit/loss, sales, top items, discounts, tax and staff performance.",
+      icon: "BarChart3"
+    },
+    {
+      key: "stock_movements",
+      name: "Stock Movement",
+      description: "Auto stock deduction history, missing mappings and low stock alerts.",
+      icon: "History"
+    },
+    {
+      key: "menu_inventory_mapping",
+      name: "Recipe Mapping",
+      description: "Map menu items to inventory ingredients for perfect stock deduction.",
+      icon: "Link2"
+    },
+    {
+      key: "restaurant_settings",
+      name: "Branding & Receipt",
+      description: "Logo, tax, service charges, receipt template and restaurant profile.",
+      icon: "Building2"
+    }
+  ];
+
+  const visibleModules = [...enabledModules, ...quickAdminModules].filter((module, index, arr) => {
+    return arr.findIndex((item) => item.key === module.key) === index;
+  });
+
+  return (
+    <div className="nexa-container">
+      <div className="nexa-hero-panel">
+        <div className="nexa-badge">
+          <Sparkles size={16} /> Premium Restaurant POS
+        </div>
+        <h2 className="nexa-client-title">Welcome, {session.tenant?.restaurantName}</h2>
+        <p className="nexa-hero-p">
+          Only your purchased POS modules are visible here. Analytics, stock history, recipe mapping, branding and receipt settings are included for every restaurant account.
+        </p>
+      </div>
+
+      <div className="nexa-stats">
+        {[
+          ["Today Sales", `Rs ${stats.todaySales}`, CircleDollarSign],
+          ["Today Orders", stats.todayOrders, ReceiptText],
+          ["Active Tables", stats.activeTables, Utensils],
+          ["Kitchen Queue", stats.pendingKitchenOrders, ChefHat],
+          ["Low Stock", stats.lowStockItems || 0, AlertTriangle],
+          ["Active Staff", stats.activeStaff || 0, Users]
+        ].map(([label, value, Icon]) => (
+          <div className="nexa-stat-card" key={label}>
+            <Icon color="#d8b4fe" size={34} />
+            <p className="nexa-stat-label">{label}</p>
+            <p className="nexa-stat-value">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="nexa-row-between">
+        <div>
+          <h3 className="nexa-section-title">Enabled Modules</h3>
+          <p className="nexa-section-sub">These options were enabled from Super Admin.</p>
+        </div>
+        <div className="nexa-pill">{visibleModules.length} active modules</div>
+      </div>
+
+      <div className="nexa-modules-grid">
+        {visibleModules.map((module) => {
+          const Icon =
+            module.key === "analytics"
+              ? BarChart3
+              : module.key === "stock_movements"
+                ? History
+                : module.key === "menu_inventory_mapping"
+                  ? Link2
+                  : module.key === "restaurant_settings"
+                    ? Building2
+                    : module.key === "inventory"
+                      ? Boxes
+                      : iconMap[module.icon] ||
+                        (module.key === "discounts" ? BadgePercent : module.key === "staff" ? Users : Sparkles);
+
+          const canOpen =
+            posModuleKeys.includes(module.key) ||
+            [
+              "orders",
+              "kds",
+              "dine_in",
+              "settings",
+              "inventory",
+              "discounts",
+              "discount",
+              "staff",
+              "waiters",
+              "riders",
+              "restaurant_settings",
+              "branding",
+              "receipt_settings",
+              "analytics",
+              "reports",
+              "profit_loss",
+              "stock_movements",
+              "stock_history",
+              "menu_inventory_mapping",
+              "recipe_mapping"
+            ].includes(module.key);
+
+          return (
+            <button
+              className="nexa-module-card"
+              key={module.key}
+              onClick={() =>
+                canOpen
+                  ? onOpenModule(module)
+                  : alert(`${module.name} module will be built in next upgrades.`)
+              }
+            >
+              <div className="nexa-module-icon">
+                <Icon size={42} />
+              </div>
+              <h4 className="nexa-module-title">{module.name}</h4>
+              <p className="nexa-module-desc">{module.description}</p>
+              <div className="nexa-module-open">
+                {canOpen ? "Open Module" : "Coming Next"} <ChevronRight size={16} />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

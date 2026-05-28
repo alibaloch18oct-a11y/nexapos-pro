@@ -234,7 +234,7 @@ function categoryEmoji(category) {
 
 function safeDisplayIcon(value, fallback) {
   const raw = String(value || "").trim();
-  if (!raw || raw.includes("?") || raw.includes("?") || raw.includes("ï¿½")) return fallback;
+  if (!raw || raw.includes("?") || raw.includes("?") || raw.includes("•")) return fallback;
   return raw;
 }
 
@@ -256,18 +256,49 @@ function paletteFromName(text) {
   return palettes[sum % palettes.length];
 }
 
+function cleanPosText(value, fallback = "") {
+  return String(value || fallback || "")
+    .replace(/\uFFFD/g, "")
+    .replace(/\u00C2/g, "")
+    .replace(/\u00C3/g, "")
+    .replace(/\u00E2/g, "")
+    .replace(/\u00F0/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isSafeImageSource(value) {
+  const src = String(value || "").trim();
+
+  if (!src) return false;
+  if (src.includes("•") || src.includes("•") || src.includes("•")) return false;
+  if (src === "null" || src === "undefined") return false;
+
+  return (
+    src.startsWith("https://") ||
+    src.startsWith("http://") ||
+    src.startsWith("data:image/")
+  );
+}
+
 function attachImages(items) {
   return (items || []).map((item) => {
-    if (item.image || item.imageUrl) {
+    const sourceImage = item.image || item.imageUrl || item.photo || item.photoUrl;
+
+    if (isSafeImageSource(sourceImage)) {
       return {
         ...item,
-        image: item.image || item.imageUrl
+        name: cleanPosText(item.name, "Menu Item"),
+        category: cleanPosText(item.category, "Items"),
+        image: sourceImage
       };
     }
 
     const palette = paletteFromName(item.name || item.category);
     return {
       ...item,
+      name: cleanPosText(item.name, "Menu Item"),
+      category: cleanPosText(item.category, "Items"),
       image: createImageCard(
         item.name || "Menu Item",
         item.subtitle || item.category || "Fresh Kitchen Item",
@@ -819,6 +850,15 @@ export default function POSScreen({ token, module, session, onBack }) {
   const [loyaltyRedeemPoints, setLoyaltyRedeemPoints] = useState("");
 
   const driveThruTicket = module?.driveThruTicket || null;
+  const activeBranchId =
+    module?.branchId ||
+    session?.roleContext?.activeBranch?.id ||
+    session?.user?.branchId ||
+    "";
+  const activeBranchName =
+    module?.branch?.name ||
+    session?.roleContext?.activeBranch?.name ||
+    "Selected Branch";
 
   useEffect(() => {
     const currentMode = module?.modeKey || getOrderMode(module);
@@ -1312,6 +1352,8 @@ export default function POSScreen({ token, module, session, onBack }) {
 
       const payload = {
         mode: orderMode,
+        branchId: activeBranchId || null,
+        branchName: activeBranchName || "",
         table: module.table || null,
         driveThru: driveThruTicket
           ? {
@@ -2899,7 +2941,7 @@ export default function POSScreen({ token, module, session, onBack }) {
               <div>
                 <h3 style={{ margin: 0 }}>Checkout Panel</h3>
                 <div className="pos-small-muted">
-                  {cart.length} items in cart ï¿½ {screenTitle}
+                  {cart.length} items in cart • {screenTitle}
                 </div>
               </div>
 
@@ -3086,6 +3128,14 @@ export default function POSScreen({ token, module, session, onBack }) {
     </div>
   );
 }
+
+
+
+
+
+
+
+
 
 
 

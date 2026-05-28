@@ -1,0 +1,1187 @@
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import { api } from "../lib/api";
+
+function normalizeMode(mode) {
+  const map = {
+    dine_in: "Dine In",
+    take_away: "Take Away",
+    delivery: "Delivery",
+    drive_thru: "Drive Thru",
+    walk_in: "Walk In",
+    kiosk: "Kiosk"
+  };
+
+  return map[mode] || mode || "POS";
+}
+
+function normalizeStatus(status) {
+  if (status === "placed" || status === "unconfirmed") return "new";
+  if (status === "completed") return "served";
+  return status || "new";
+}
+
+function statusLabel(status) {
+  const map = {
+    new: "New",
+    placed: "New",
+    preparing: "Preparing",
+    ready: "Ready",
+    served: "Served",
+    completed: "Served",
+    cancelled: "Cancelled",
+    rider_picked: "Rider Picked",
+    rider_on_way: "Rider On Way",
+    rider_delivered: "Delivered",
+    cash_received: "Cash Received"
+  };
+
+  return map[status] || status || "New";
+}
+
+function statusTone(status) {
+  const current = normalizeStatus(status);
+
+  if (current === "new") {
+    return { color: "#a5f3fc", bg: "rgba(34,211,238,.13)", border: "rgba(34,211,238,.30)", icon: "NEW" };
+  }
+
+  if (current === "preparing") {
+    return { color: "#fde68a", bg: "rgba(250,204,21,.13)", border: "rgba(250,204,21,.30)", icon: "COOK" };
+  }
+
+  if (current === "ready") {
+    return { color: "#86efac", bg: "rgba(34,197,94,.13)", border: "rgba(34,197,94,.30)", icon: "READY" };
+  }
+
+  if (current === "rider_picked") {
+    return { color: "#c4b5fd", bg: "rgba(168,85,247,.13)", border: "rgba(168,85,247,.30)", icon: "PICK" };
+  }
+
+  if (current === "rider_on_way") {
+    return { color: "#93c5fd", bg: "rgba(59,130,246,.13)", border: "rgba(59,130,246,.30)", icon: "RIDE" };
+  }
+
+  if (current === "rider_delivered") {
+    return { color: "#bbf7d0", bg: "rgba(22,163,74,.13)", border: "rgba(22,163,74,.30)", icon: "DONE" };
+  }
+
+  if (current === "cash_received") {
+    return { color: "#fef08a", bg: "rgba(234,179,8,.13)", border: "rgba(234,179,8,.30)", icon: "COD" };
+  }
+
+  if (current === "served" || current === "completed") {
+    return { color: "#bbf7d0", bg: "rgba(22,163,74,.13)", border: "rgba(22,163,74,.30)", icon: "SERVED" };
+  }
+
+  if (current === "cancelled") {
+    return { color: "#fca5a5", bg: "rgba(239,68,68,.13)", border: "rgba(239,68,68,.30)", icon: "X" };
+  }
+
+  return { color: "#cbd5e1", bg: "rgba(255,255,255,.08)", border: "rgba(255,255,255,.12)", icon: "KDS" };
+}
+
+function secondsSince(value, nowMs) {
+  const date = new Date(value || Date.now()).getTime();
+  if (Number.isNaN(date)) return 0;
+  return Math.max(0, Math.floor((nowMs - date) / 1000));
+}
+
+function formatTimer(seconds) {
+  const safe = Math.max(0, Number(seconds || 0));
+  const m = Math.floor(safe / 60);
+  const s = safe % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function money(order, value) {
+  return `${order?.currency || order?.restaurantSettings?.currency || "Rs"} ${Math.round(Number(value || 0)).toLocaleString()}`;
+}
+
+function orderKey(order) {
+  return order.id || order.orderNo || `${order.createdAt}-${order.phone}`;
+}
+
+function isUnpaidDelivery(order) {
+  const method = String(order.paymentMethod || "").toLowerCase();
+  const status = String(order.paymentStatus || "").toLowerCase();
+
+  return (
+    order.mode === "delivery" &&
+    (
+      status === "unpaid" ||
+      method.includes("cash on delivery") ||
+      method === "cod" ||
+      method.includes("pay later") ||
+      method.includes("unpaid")
+    )
+  );
+}
+
+function workflowSteps(order) {
+  if (order.mode === "delivery") {
+    return isUnpaidDelivery(order)
+      ? ["new", "preparing", "ready", "rider_picked", "rider_on_way", "rider_delivered", "cash_received"]
+      : ["new", "preparing", "ready", "rider_picked", "rider_on_way", "rider_delivered"];
+  }
+
+  return ["new", "preparing", "ready", "served"];
+}
+
+function nextStatusFor(order) {
+  const current = normalizeStatus(order.kitchenStatus || order.orderStatus);
+  const steps = workflowSteps(order);
+  const index = steps.indexOf(current);
+  if (index < 0 || index >= steps.length - 1) return null;
+  return steps[index + 1];
+}
+
+function statusMinutes(current, settings) {
+  const map = {
+    new: settings.newToPreparingMinutes,
+    preparing: settings.preparingToReadyMinutes,
+    ready: settings.readyToRiderPickedMinutes,
+    rider_picked: settings.riderPickedToOnWayMinutes,
+    rider_on_way: settings.riderOnWayToDeliveredMinutes,
+    rider_delivered: settings.deliveredToCashReceivedMinutes
+  };
+
+  return Math.max(1, Number(map[current] || 1));
+}
+
+function getTimer(order, settings, nowMs) {
+  const current = normalizeStatus(order.kitchenStatus || order.orderStatus);
+  const nextStatus = nextStatusFor(order);
+
+  if (!nextStatus) {
+    return {
+      elapsedSeconds: secondsSince(order.kitchenStatusChangedAt || order.createdAt || order.date, nowMs),
+      remainingSeconds: 0,
+      durationSeconds: 0,
+      progress: 100,
+      nextStatus: null,
+      overdue: false
+    };
+  }
+
+  if (order.kdsTimer?.dueAt) {
+    const dueMs = new Date(order.kdsTimer.dueAt).getTime();
+    const changedMs = new Date(order.kdsTimer.changedAt || order.kitchenStatusChangedAt || order.createdAt || Date.now()).getTime();
+    const duration = Math.max(1, Math.floor((dueMs - changedMs) / 1000));
+    const elapsed = Math.max(0, Math.floor((nowMs - changedMs) / 1000));
+    const remaining = Math.ceil((dueMs - nowMs) / 1000);
+
+    return {
+      elapsedSeconds: elapsed,
+      remainingSeconds: Math.max(0, remaining),
+      durationSeconds: duration,
+      progress: Math.min(100, Math.round((elapsed / duration) * 100)),
+      nextStatus,
+      overdue: remaining <= 0
+    };
+  }
+
+  const changedAt = order.kitchenStatusChangedAt || order.updatedAt || order.createdAt || order.date || new Date().toISOString();
+  const elapsed = secondsSince(changedAt, nowMs);
+  const duration = statusMinutes(current, settings) * 60;
+  const remaining = duration - elapsed;
+
+  return {
+    elapsedSeconds: elapsed,
+    remainingSeconds: Math.max(0, remaining),
+    durationSeconds: duration,
+    progress: Math.min(100, Math.round((elapsed / duration) * 100)),
+    nextStatus,
+    overdue: remaining <= 0
+  };
+}
+
+function playBeep() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audio = new AudioContext();
+    const osc = audio.createOscillator();
+    const gain = audio.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, audio.currentTime);
+    osc.frequency.setValueAtTime(660, audio.currentTime + 0.12);
+
+    gain.gain.setValueAtTime(0.0001, audio.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.18, audio.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.38);
+
+    osc.connect(gain);
+    gain.connect(audio.destination);
+    osc.start(audio.currentTime);
+    osc.stop(audio.currentTime + 0.42);
+  } catch {
+    // Browser blocked sound.
+  }
+}
+
+function SettingsModal({ settings, setSettings, onClose, onSave, saving }) {
+  function update(key, value) {
+    setSettings((prev) => ({
+      ...prev,
+      [key]: value
+    }));
+  }
+
+  const fields = [
+    ["newToPreparingMinutes", "New -> Preparing"],
+    ["preparingToReadyMinutes", "Preparing -> Ready"],
+    ["readyToRiderPickedMinutes", "Ready -> Rider Picked"],
+    ["riderPickedToOnWayMinutes", "Rider Picked -> Rider On Way"],
+    ["riderOnWayToDeliveredMinutes", "Rider On Way -> Delivered"],
+    ["deliveredToCashReceivedMinutes", "Delivered -> Cash Received"]
+  ];
+
+  return (
+    <div className="kds-modal-backdrop">
+      <div className="kds-settings-modal">
+        <div className="kds-modal-head">
+          <div>
+            <h2>KDS Auto Timer Settings</h2>
+            <p>Owner can adjust exact kitchen and delivery timers.</p>
+          </div>
+          <button className="kds-icon-btn" onClick={onClose}>ï¿½</button>
+        </div>
+
+        <label className="kds-toggle-row">
+          <span>
+            <strong>Auto Timer</strong>
+            <small>Automatically move orders to next workflow step.</small>
+          </span>
+
+          <input
+            type="checkbox"
+            checked={settings.autoEnabled}
+            onChange={(e) => update("autoEnabled", e.target.checked)}
+          />
+        </label>
+
+        <div className="kds-settings-grid">
+          {fields.map(([key, label]) => (
+            <label className="kds-field" key={key}>
+              <span>{label}</span>
+              <input
+                type="number"
+                min="1"
+                value={settings[key] || 1}
+                onChange={(e) => update(key, Number(e.target.value || 1))}
+              />
+              <small>minutes</small>
+            </label>
+          ))}
+        </div>
+
+        <div className="kds-modal-actions">
+          <button className="kds-soft-btn" onClick={onClose}>Cancel</button>
+          <button className="kds-primary-btn" onClick={onSave} disabled={saving}>
+            {saving ? "Saving..." : "Save Settings"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KDSOrderCard({ order, isFresh, settings, nowMs, onUpdateStatus }) {
+  const current = normalizeStatus(order.kitchenStatus || order.orderStatus);
+  const tone = statusTone(current);
+  const items = Array.isArray(order.items) ? order.items : [];
+  const next = nextStatusFor(order);
+  const steps = workflowSteps(order);
+  const currentIndex = steps.indexOf(current);
+  const customerName = `${order?.customer?.firstName || ""} ${order?.customer?.lastName || ""}`.trim();
+  const timer = getTimer(order, settings, nowMs);
+
+  return (
+    <div
+      className={`kds-card ${isFresh ? "fresh" : ""}`}
+      style={{
+        borderColor: isFresh ? "rgba(250,204,21,.54)" : tone.border,
+        background: `radial-gradient(circle at top left, ${tone.bg}, transparent 38%), rgba(15,23,42,.90)`
+      }}
+    >
+      <div className="kds-card-head">
+        <div>
+          <h3>{order.kitchenToken || order.orderNo || "Kitchen Order"}</h3>
+          {order.customerToken ? <div className="kds-customer-token">Customer Token: {order.customerToken}</div> : null}
+          <p>{new Date(order.createdAt || order.date || Date.now()).toLocaleString()}</p>
+        </div>
+
+        <div className="kds-status-icon" style={{ background: tone.bg, color: tone.color, borderColor: tone.border }}>
+          {tone.icon}
+        </div>
+      </div>
+
+      <div className="kds-timer-box">
+        <div>
+          <span>Current Step</span>
+          <strong style={{ color: tone.color }}>{statusLabel(current)}</strong>
+        </div>
+
+        <div>
+          <span>{timer.nextStatus ? `Next: ${statusLabel(timer.nextStatus)}` : "Workflow Done"}</span>
+          <strong className={timer.overdue && timer.nextStatus ? "timer-overdue" : ""}>
+            {timer.nextStatus ? formatTimer(timer.remainingSeconds) : "DONE"}
+          </strong>
+        </div>
+      </div>
+
+      <div className="kds-progress">
+        <div style={{ width: `${timer.progress}%`, background: timer.overdue ? "#ef4444" : tone.color }} />
+      </div>
+
+      <div className="kds-pill-row">
+        <span>{normalizeMode(order.mode)}</span>
+        <span>Elapsed {formatTimer(timer.elapsedSeconds)}</span>
+        <span>{order.paymentStatus || "payment"}</span>
+        {order.mode === "delivery" && order.riderName ? <span>Rider: {order.riderName}</span> : null}
+        {order.table?.name ? <span>Table {order.table.name}</span> : null}
+      </div>
+
+      <div className="kds-workflow">
+        {steps.map((step, index) => {
+          const active = index <= currentIndex;
+          const stepTone = statusTone(step);
+
+          return (
+            <button
+              key={step}
+              className={`kds-step ${active ? "active" : ""}`}
+              onClick={() => onUpdateStatus(order, step)}
+              style={{
+                borderColor: active ? stepTone.border : "rgba(255,255,255,.10)",
+                color: active ? stepTone.color : "#94a3b8",
+                background: active ? stepTone.bg : "rgba(255,255,255,.045)"
+              }}
+            >
+              <b>{stepTone.icon}</b>
+              <span>{statusLabel(step)}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="kds-items-box">
+        {items.length === 0 ? (
+          <p className="kds-muted">No items found.</p>
+        ) : (
+          items.map((item, index) => {
+            const qty = Number(item.qty || item.quantity || 1);
+            const price = Number(item.price || 0);
+
+            return (
+              <div className="kds-item-row" key={`${item.id || item.name}-${index}`}>
+                <div className="kds-qty">{qty}</div>
+
+                <div>
+                  <strong>{item.name}</strong>
+                  <p>{item.category || item.subtitle || "Menu Item"}</p>
+                </div>
+
+                <strong>{money(order, qty * price)}</strong>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {(customerName || order.phone || order.orderInstructions) ? (
+        <div className="kds-note-box">
+          {customerName ? <p>Customer: {customerName}</p> : null}
+          {order.phone ? <p>Phone: {order.phone}</p> : null}
+          {order.mode === "delivery" && order.deliveryAddress ? <p>Address: {order.deliveryAddress}</p> : null}
+          {order.mode === "delivery" && order.delivery?.address ? <p>Address: {order.delivery.address}</p> : null}
+          {order.orderInstructions ? <strong>Note: {order.orderInstructions}</strong> : null}
+        </div>
+      ) : null}
+
+      <div className="kds-card-actions">
+        <button onClick={() => onUpdateStatus(order, "new")}>New</button>
+        <button onClick={() => onUpdateStatus(order, "preparing")}>Preparing</button>
+        <button onClick={() => onUpdateStatus(order, "ready")}>Ready</button>
+
+        {order.mode === "delivery" ? (
+          <>
+            <button onClick={() => onUpdateStatus(order, "rider_picked")}>Picked</button>
+            <button onClick={() => onUpdateStatus(order, "rider_on_way")}>On Way</button>
+            <button onClick={() => onUpdateStatus(order, "rider_delivered")}>Delivered</button>
+            {isUnpaidDelivery(order) ? (
+              <button onClick={() => onUpdateStatus(order, "cash_received")}>Cash Received</button>
+            ) : null}
+          </>
+        ) : (
+          <button onClick={() => onUpdateStatus(order, "served")}>Served</button>
+        )}
+
+        {next ? (
+          <button className="primary" onClick={() => onUpdateStatus(order, next)}>
+            Next: {statusLabel(next)}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export default function KDSPanel({ token, onBack }) {
+  const [orders, setOrders] = useState([]);
+  const [settings, setSettings] = useState({
+    autoEnabled: true,
+    newToPreparingMinutes: 2,
+    preparingToReadyMinutes: 8,
+    readyToRiderPickedMinutes: 2,
+    riderPickedToOnWayMinutes: 2,
+    riderOnWayToDeliveredMinutes: 20,
+    deliveredToCashReceivedMinutes: 3
+  });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [freshOrderIds, setFreshOrderIds] = useState([]);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("active");
+  const [modeFilter, setModeFilter] = useState("all");
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [lastRefreshAt, setLastRefreshAt] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [nowMs, setNowMs] = useState(Date.now());
+
+  const knownOrderIdsRef = useRef(new Set());
+  const initialLoadDoneRef = useRef(false);
+
+  async function loadBoard({ silent = false } = {}) {
+    if (!silent) setLoading(true);
+
+    try {
+      const res = await api(token).get("/api/kds-auto/board");
+      const list = res.data.orders || [];
+
+      const nextIds = new Set(list.map(orderKey));
+
+      if (initialLoadDoneRef.current) {
+        const newIds = list.map(orderKey).filter((id) => !knownOrderIdsRef.current.has(id));
+
+        if (newIds.length > 0) {
+          setFreshOrderIds((prev) => [...new Set([...prev, ...newIds])]);
+
+          if (soundEnabled) {
+            playBeep();
+            setTimeout(playBeep, 650);
+          }
+
+          setTimeout(() => {
+            setFreshOrderIds((prev) => prev.filter((id) => !newIds.includes(id)));
+          }, 18000);
+        }
+      }
+
+      knownOrderIdsRef.current = nextIds;
+      initialLoadDoneRef.current = true;
+
+      setOrders(list);
+      setSettings(res.data.settings || settings);
+      setLastRefreshAt(new Date().toLocaleTimeString());
+      setNowMs(Date.now());
+    } catch (error) {
+      if (!silent) {
+        alert(error.response?.data?.message || "Failed to load KDS board.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveSettings() {
+    setSavingSettings(true);
+
+    try {
+      const res = await api(token).patch("/api/kds-auto/settings", settings);
+      setSettings(res.data.settings);
+      setSettingsOpen(false);
+      alert("KDS timer settings saved.");
+      await loadBoard({ silent: true });
+    } catch (error) {
+      alert(error.response?.data?.message || "Failed to save KDS settings.");
+    } finally {
+      setSavingSettings(false);
+    }
+  }
+
+  async function updateOrderStatus(order, nextStatus) {
+    if (!order?.id) {
+      alert("Order ID missing. Refresh KDS and try again.");
+      return;
+    }
+
+    try {
+      const res = await api(token).patch(`/api/kds-auto/orders/${order.id}/status`, {
+        kitchenStatus: nextStatus
+      });
+
+      const updatedOrder = res.data.order;
+
+      setFreshOrderIds((prev) => prev.filter((id) => id !== orderKey(order)));
+
+      setOrders((prev) =>
+        prev.map((item) => (item.id === order.id ? updatedOrder : item))
+      );
+
+      setNowMs(Date.now());
+    } catch (error) {
+      alert(error.response?.data?.message || "Failed to update kitchen status.");
+    }
+  }
+
+  useEffect(() => {
+    loadBoard();
+  }, []);
+
+  useEffect(() => {
+    const tick = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, []);
+
+  useEffect(() => {
+    if (!autoRefreshEnabled) return;
+
+    const interval = setInterval(() => {
+      loadBoard({ silent: true });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [autoRefreshEnabled, soundEnabled]);
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      const q = search.toLowerCase();
+      const current = normalizeStatus(order.kitchenStatus || order.orderStatus);
+
+      const customerName = `${order?.customer?.firstName || ""} ${order?.customer?.lastName || ""}`.trim();
+
+      const bySearch =
+        !q ||
+        String(order.orderNo || "").toLowerCase().includes(q) ||
+        String(order.phone || "").toLowerCase().includes(q) ||
+        String(customerName || "").toLowerCase().includes(q) ||
+        String(order.waiterName || "").toLowerCase().includes(q) ||
+        String(order.riderName || "").toLowerCase().includes(q) ||
+        String(order.mode || "").toLowerCase().includes(q) ||
+        (Array.isArray(order.items) &&
+          order.items.some((item) => String(item.name || "").toLowerCase().includes(q)));
+
+      const byMode = modeFilter === "all" || order.mode === modeFilter;
+
+      const byStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" && !["served", "completed", "cancelled", "cash_received"].includes(current)) ||
+        current === statusFilter;
+
+      return bySearch && byMode && byStatus;
+    });
+  }, [orders, search, statusFilter, modeFilter]);
+
+  const stats = {
+    new: orders.filter((o) => normalizeStatus(o.kitchenStatus || o.orderStatus) === "new").length,
+    preparing: orders.filter((o) => normalizeStatus(o.kitchenStatus || o.orderStatus) === "preparing").length,
+    ready: orders.filter((o) => normalizeStatus(o.kitchenStatus || o.orderStatus) === "ready").length,
+    delivery: orders.filter((o) => o.mode === "delivery").length,
+    rider: orders.filter((o) => ["rider_picked", "rider_on_way"].includes(normalizeStatus(o.kitchenStatus || o.orderStatus))).length,
+    cash: orders.filter((o) => normalizeStatus(o.kitchenStatus || o.orderStatus) === "cash_received").length
+  };
+
+  return (
+    <div className="kds-page">
+      <style>
+        {`
+          .kds-page {
+            min-height: 100vh;
+            color: white;
+            padding: 18px;
+            background:
+              radial-gradient(circle at 12% 16%, rgba(34,211,238,.13), transparent 28%),
+              radial-gradient(circle at 86% 12%, rgba(168,85,247,.13), transparent 30%),
+              linear-gradient(180deg,#020617,#071028);
+          }
+
+          .kds-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            align-items: start;
+            margin-bottom: 16px;
+          }
+
+          .kds-back,
+          .kds-soft-btn,
+          .kds-primary-btn,
+          .kds-icon-btn {
+            border: 0;
+            color: white;
+            font-weight: 900;
+            cursor: pointer;
+            transition: .18s ease;
+          }
+
+          .kds-back,
+          .kds-soft-btn,
+          .kds-icon-btn {
+            background: rgba(255,255,255,.08);
+            border: 1px solid rgba(255,255,255,.10);
+          }
+
+          .kds-back,
+          .kds-soft-btn,
+          .kds-primary-btn {
+            height: 44px;
+            padding: 0 14px;
+            border-radius: 15px;
+          }
+
+          .kds-icon-btn {
+            width: 46px;
+            height: 46px;
+            border-radius: 16px;
+          }
+
+          .kds-primary-btn {
+            background: linear-gradient(135deg,#06b6d4,#2563eb);
+          }
+
+          .kds-title {
+            margin: 13px 0 4px;
+            font-size: 34px;
+            font-weight: 1000;
+            letter-spacing: -.04em;
+          }
+
+          .kds-sub {
+            margin: 0;
+            color: #94a3b8;
+          }
+
+          .kds-head-actions {
+            display: flex;
+            gap: 9px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+          }
+
+          .kds-stats {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 12px;
+            margin-bottom: 14px;
+          }
+
+          .kds-stat-card {
+            padding: 14px;
+            border-radius: 22px;
+            background: rgba(15,23,42,.75);
+            border: 1px solid rgba(255,255,255,.10);
+          }
+
+          .kds-stat-card span {
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 800;
+          }
+
+          .kds-stat-card strong {
+            display: block;
+            margin-top: 5px;
+            font-size: 26px;
+          }
+
+          .kds-toolbar {
+            padding: 14px;
+            border-radius: 24px;
+            background: rgba(15,23,42,.76);
+            border: 1px solid rgba(255,255,255,.10);
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 12px;
+            margin-bottom: 14px;
+          }
+
+          .kds-search {
+            height: 44px;
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.07);
+            color: white;
+            padding: 0 14px;
+            outline: none;
+          }
+
+          .kds-filter-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+          }
+
+          .kds-filter-row button {
+            height: 38px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.07);
+            color: white;
+            padding: 0 12px;
+            font-weight: 850;
+            cursor: pointer;
+          }
+
+          .kds-filter-row button.active {
+            background: rgba(34,211,238,.18);
+            border-color: rgba(34,211,238,.34);
+          }
+
+          .kds-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(390px, 1fr));
+            gap: 14px;
+          }
+
+          .kds-card {
+            border-radius: 28px;
+            border: 1px solid rgba(255,255,255,.10);
+            padding: 14px;
+            box-shadow: 0 18px 50px rgba(0,0,0,.25);
+          }
+
+          .kds-card.fresh {
+            animation: freshPulse 1.2s ease-in-out infinite;
+          }
+
+          @keyframes freshPulse {
+            0%,100% { transform: scale(1); }
+            50% { transform: scale(1.01); }
+          }
+
+          .kds-card-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+          }
+
+          .kds-card h3 {
+            margin: 0;
+            font-size: 23px;
+          }
+
+          .kds-card p {
+            margin: 5px 0 0;
+            color: #94a3b8;
+            font-size: 13px;
+          }
+
+          .kds-customer-token {
+            margin-top: 5px;
+            color: #a5f3fc;
+            font-size: 13px;
+            font-weight: 900;
+          }
+
+          .kds-status-icon {
+            width: 58px;
+            height: 58px;
+            border-radius: 21px;
+            border: 1px solid;
+            display: grid;
+            place-items: center;
+            font-size: 11px; font-weight: 1000; letter-spacing: .04em; padding: 0 6px; text-align: center;
+          }
+
+          .kds-timer-box {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 20px;
+            background: rgba(2,6,23,.38);
+            border: 1px solid rgba(255,255,255,.08);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+          }
+
+          .kds-timer-box span {
+            display: block;
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 800;
+            margin-bottom: 4px;
+          }
+
+          .kds-timer-box strong {
+            font-size: 20px;
+            font-weight: 1000;
+          }
+
+          .timer-overdue {
+            color: #fca5a5 !important;
+          }
+
+          .kds-progress {
+            height: 9px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.08);
+            overflow: hidden;
+            margin-top: 9px;
+          }
+
+          .kds-progress div {
+            height: 100%;
+            border-radius: inherit;
+            transition: width .4s ease;
+          }
+
+          .kds-pill-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+          }
+
+          .kds-pill-row span {
+            padding: 8px 10px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.07);
+            border: 1px solid rgba(255,255,255,.08);
+            font-size: 12px;
+            font-weight: 850;
+          }
+
+          .kds-workflow {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+            gap: 8px;
+            margin-top: 12px;
+          }
+
+          .kds-step {
+            min-height: 60px;
+            border-radius: 17px;
+            border: 1px solid;
+            cursor: pointer;
+            display: grid;
+            justify-items: center;
+            align-content: center;
+            gap: 4px;
+            font-weight: 850;
+          }
+
+          .kds-step b {
+            font-size: 20px;
+          }
+
+          .kds-step span {
+            font-size: 11px;
+          }
+
+          .kds-items-box {
+            margin-top: 12px;
+            border-radius: 20px;
+            background: rgba(2,6,23,.38);
+            border: 1px solid rgba(255,255,255,.08);
+            overflow: hidden;
+          }
+
+          .kds-item-row {
+            display: grid;
+            grid-template-columns: 42px 1fr auto;
+            gap: 10px;
+            align-items: center;
+            padding: 11px;
+            border-bottom: 1px solid rgba(255,255,255,.07);
+          }
+
+          .kds-item-row:last-child {
+            border-bottom: 0;
+          }
+
+          .kds-qty {
+            width: 36px;
+            height: 36px;
+            border-radius: 13px;
+            display: grid;
+            place-items: center;
+            background: rgba(34,211,238,.13);
+            color: #a5f3fc;
+            font-weight: 1000;
+          }
+
+          .kds-note-box {
+            margin-top: 12px;
+            padding: 11px;
+            border-radius: 18px;
+            background: rgba(250,204,21,.08);
+            border: 1px solid rgba(250,204,21,.18);
+          }
+
+          .kds-note-box p {
+            margin: 0 0 5px;
+          }
+
+          .kds-note-box strong {
+            color: #fde68a;
+          }
+
+          .kds-card-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+          }
+
+          .kds-card-actions button {
+            min-height: 38px;
+            border-radius: 13px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.07);
+            color: white;
+            padding: 0 10px;
+            font-weight: 850;
+            cursor: pointer;
+          }
+
+          .kds-card-actions button.primary {
+            background: linear-gradient(135deg,#06b6d4,#2563eb);
+            border: 0;
+          }
+
+          .kds-muted {
+            padding: 14px;
+            color: #94a3b8;
+          }
+
+          .kds-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: rgba(2,6,23,.72);
+            backdrop-filter: blur(10px);
+            display: grid;
+            place-items: center;
+            padding: 18px;
+          }
+
+          .kds-settings-modal {
+            width: min(760px, calc(100vw - 36px));
+            max-height: calc(100vh - 36px);
+            overflow-y: auto;
+            border-radius: 28px;
+            background: #0f172a;
+            border: 1px solid rgba(255,255,255,.12);
+            box-shadow: 0 30px 90px rgba(0,0,0,.45);
+            padding: 18px;
+          }
+
+          .kds-modal-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            gap: 14px;
+            margin-bottom: 14px;
+          }
+
+          .kds-modal-head h2 {
+            margin: 0;
+          }
+
+          .kds-modal-head p {
+            margin: 6px 0 0;
+            color: #94a3b8;
+          }
+
+          .kds-toggle-row {
+            padding: 14px;
+            border-radius: 20px;
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(255,255,255,.10);
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 14px;
+          }
+
+          .kds-toggle-row small {
+            display: block;
+            margin-top: 4px;
+            color: #94a3b8;
+          }
+
+          .kds-toggle-row input {
+            width: 22px;
+            height: 22px;
+          }
+
+          .kds-settings-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+          }
+
+          .kds-field {
+            padding: 13px;
+            border-radius: 20px;
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(255,255,255,.10);
+            display: grid;
+            gap: 8px;
+          }
+
+          .kds-field span {
+            font-weight: 900;
+          }
+
+          .kds-field input {
+            height: 42px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.08);
+            color: white;
+            padding: 0 12px;
+            outline: none;
+          }
+
+          .kds-field small {
+            color: #94a3b8;
+          }
+
+          .kds-modal-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 14px;
+          }
+
+          @media (max-width: 960px) {
+            .kds-stats,
+            .kds-toolbar,
+            .kds-settings-grid,
+            .kds-modal-actions,
+            .kds-timer-box {
+              grid-template-columns: 1fr;
+            }
+
+            .kds-filter-row {
+              justify-content: flex-start;
+            }
+          }
+        `}
+      </style>
+
+      <div className="kds-head">
+        <div>
+          <button className="kds-back" onClick={onBack}>Back</button>
+          <h1 className="kds-title">Kitchen Display System</h1>
+          <p className="kds-sub">
+            Accurate live timers with auto workflow: New -> Preparing -> Ready. Delivery adds rider and cash received steps.
+          </p>
+        </div>
+
+        <div className="kds-head-actions">
+          <button className="kds-soft-btn" onClick={() => setSoundEnabled((prev) => !prev)}>
+            Sound {soundEnabled ? "On" : "Off"}
+          </button>
+
+          <button className="kds-soft-btn" onClick={() => setAutoRefreshEnabled((prev) => !prev)}>
+            Refresh {autoRefreshEnabled ? "Auto 5s" : "Manual"}
+          </button>
+
+          <button className="kds-soft-btn" onClick={() => setSettingsOpen(true)}>
+            Timer Settings
+          </button>
+
+          <button className="kds-primary-btn" onClick={() => loadBoard()}>
+            Refresh Board
+          </button>
+        </div>
+      </div>
+
+      <div className="kds-stats">
+        <div className="kds-stat-card"><span>New</span><strong>{stats.new}</strong></div>
+        <div className="kds-stat-card"><span>Preparing</span><strong>{stats.preparing}</strong></div>
+        <div className="kds-stat-card"><span>Ready</span><strong>{stats.ready}</strong></div>
+        <div className="kds-stat-card"><span>Delivery</span><strong>{stats.delivery}</strong></div>
+        <div className="kds-stat-card"><span>Rider Flow</span><strong>{stats.rider}</strong></div>
+        <div className="kds-stat-card"><span>Cash Done</span><strong>{stats.cash}</strong></div>
+      </div>
+
+      <div className="kds-toolbar">
+        <input
+          className="kds-search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search order, item, phone, rider..."
+        />
+
+        <div className="kds-filter-row">
+          {["active", "all", "new", "preparing", "ready", "rider_picked", "rider_on_way", "rider_delivered", "cash_received"].map((item) => (
+            <button
+              key={item}
+              className={statusFilter === item ? "active" : ""}
+              onClick={() => setStatusFilter(item)}
+            >
+              {item === "active" ? "Active" : statusLabel(item)}
+            </button>
+          ))}
+
+          {["all", "dine_in", "take_away", "delivery", "drive_thru"].map((item) => (
+            <button
+              key={item}
+              className={modeFilter === item ? "active" : ""}
+              onClick={() => setModeFilter(item)}
+            >
+              {item === "all" ? "All Modes" : normalizeMode(item)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="kds-muted">Loading KDS board...</div>
+      ) : filteredOrders.length === 0 ? (
+        <div className="kds-muted">No KDS orders found.</div>
+      ) : (
+        <div className="kds-grid">
+          {filteredOrders.map((order) => (
+            <KDSOrderCard
+              key={orderKey(order)}
+              order={order}
+              settings={settings}
+              nowMs={nowMs}
+              isFresh={freshOrderIds.includes(orderKey(order))}
+              onUpdateStatus={updateOrderStatus}
+            />
+          ))}
+        </div>
+      )}
+
+      <p className="kds-muted">
+        Last refresh: {lastRefreshAt || "Not refreshed"} ï¿½ Auto timer: {settings.autoEnabled ? "Enabled" : "Disabled"}
+      </p>
+
+      {settingsOpen ? (
+        <SettingsModal
+          settings={settings}
+          setSettings={setSettings}
+          onClose={() => setSettingsOpen(false)}
+          onSave={saveSettings}
+          saving={savingSettings}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+
+
+
+
+
+

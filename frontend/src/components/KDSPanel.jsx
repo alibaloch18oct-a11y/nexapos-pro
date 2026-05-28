@@ -244,7 +244,7 @@ function SettingsModal({ settings, setSettings, onClose, onSave, saving }) {
             <h2>KDS Auto Timer Settings</h2>
             <p>Owner can adjust exact kitchen and delivery timers.</p>
           </div>
-          <button className="kds-icon-btn" onClick={onClose}>ï¿½</button>
+          <button className="kds-icon-btn" onClick={onClose}>{"\u00D7"}</button>
         </div>
 
         <label className="kds-toggle-row">
@@ -427,7 +427,7 @@ function KDSOrderCard({ order, isFresh, settings, nowMs, onUpdateStatus }) {
   );
 }
 
-export default function KDSPanel({ token, onBack }) {
+export default function KDSPanel({ token, session, roleContext, activeModuleBranchId, activeModuleBranchName, activeModuleBranchMode, onBack }) {
   const [orders, setOrders] = useState([]);
   const [settings, setSettings] = useState({
     autoEnabled: true,
@@ -448,7 +448,44 @@ export default function KDSPanel({ token, onBack }) {
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [lastRefreshAt, setLastRefreshAt] = useState("");
   const [loading, setLoading] = useState(true);
+  const [selectedBranchId, setSelectedBranchId] = useState(() => {
+    const saved = localStorage.getItem("nexapos_selected_branch_id");
+    if (saved) return saved;
+
+    return activeModuleBranchMode === "all"
+      ? "all"
+      : activeModuleBranchId || roleContext?.activeBranch?.id || session?.roleContext?.activeBranch?.id || "all";
+  });
   const [nowMs, setNowMs] = useState(Date.now());
+
+  const branches = roleContext?.branches || session?.roleContext?.branches || [];
+
+  function readKdsBranchId(order) {
+    return (
+      order?.branchId ||
+      order?.branch_id ||
+      order?.raw?.branchId ||
+      order?.raw?.branch_id ||
+      order?.metadata?.branchId ||
+      ""
+    );
+  }
+
+  function readKdsBranchName(order) {
+    if (order?.branchName) return order.branchName;
+    if (order?.branch?.name) return order.branch.name;
+    if (order?.raw?.branchName) return order.raw.branchName;
+
+    const id = readKdsBranchId(order);
+    const found = branches.find((branch) => String(branch.id) === String(id));
+
+    return found?.name || activeModuleBranchName || id || "No Branch / Old Order";
+  }
+
+  function filterKdsOrders(list, branchId = selectedBranchId) {
+    if (!branchId || branchId === "all") return list;
+    return list.filter((order) => String(readKdsBranchId(order)) === String(branchId));
+  }
 
   const knownOrderIdsRef = useRef(new Set());
   const initialLoadDoneRef = useRef(false);
@@ -482,7 +519,7 @@ export default function KDSPanel({ token, onBack }) {
       knownOrderIdsRef.current = nextIds;
       initialLoadDoneRef.current = true;
 
-      setOrders(list);
+      setOrders(filterKdsOrders(list));
       setSettings(res.data.settings || settings);
       setLastRefreshAt(new Date().toLocaleTimeString());
       setNowMs(Date.now());
@@ -539,6 +576,23 @@ export default function KDSPanel({ token, onBack }) {
   useEffect(() => {
     loadBoard();
   }, []);
+
+  // Final branch sync for KDS
+  useEffect(() => {
+    const saved = localStorage.getItem("nexapos_selected_branch_id");
+
+    const nextBranchId =
+      saved ||
+      (activeModuleBranchMode === "all"
+        ? "all"
+        : activeModuleBranchId || roleContext?.activeBranch?.id || session?.roleContext?.activeBranch?.id || "all");
+
+    setSelectedBranchId(nextBranchId);
+  }, [activeModuleBranchId, activeModuleBranchMode]);
+
+  useEffect(() => {
+    loadBoard({ silent: true });
+  }, [selectedBranchId]);
 
   useEffect(() => {
     const tick = setInterval(() => setNowMs(Date.now()), 1000);
@@ -1163,7 +1217,7 @@ export default function KDSPanel({ token, onBack }) {
       )}
 
       <p className="kds-muted">
-        Last refresh: {lastRefreshAt || "Not refreshed"} ï¿½ Auto timer: {settings.autoEnabled ? "Enabled" : "Disabled"}
+        Last refresh: {lastRefreshAt || "Not refreshed"} {"\u2022"} Auto timer: {settings.autoEnabled ? "Enabled" : "Disabled"}
       </p>
 
       {settingsOpen ? (
@@ -1178,6 +1232,9 @@ export default function KDSPanel({ token, onBack }) {
     </div>
   );
 }
+
+
+
 
 
 

@@ -1,0 +1,2301 @@
+﻿import React, { useEffect, useMemo, useState } from "react";
+import { api, formatMode, getOrderMode } from "../lib/api";
+import { paymentMethods as sharedPaymentMethods } from "../lib/data";
+import ThermalReceipt from "./ThermalReceipt";
+
+const defaultRestaurantSettings = {
+  restaurantName: "Nexa Restaurant",
+  brandTitle: "Nexa Restaurant",
+  receiptTitle: "Nexa Restaurant",
+  receiptSubtitle: "Premium Restaurant POS Receipt",
+  logoUrl: "",
+  address: "",
+  phone: "",
+  email: "",
+  currency: "Rs",
+  taxName: "GST",
+  taxPercent: 5,
+  serviceChargeName: "Service Charges",
+  serviceChargePercent: 0,
+  receiptFooter: "Thank you for your order.",
+  receiptNote: "Powered by NexaPOS Pro",
+  showTaxOnReceipt: true,
+  showServiceChargeOnReceipt: true
+};
+
+const basePaymentMethods =
+  Array.isArray(sharedPaymentMethods) && sharedPaymentMethods.length
+    ? sharedPaymentMethods
+    : ["Cash", "Card", "Easypaisa", "JazzCash", "Bank Transfer", "Complimentary"];
+
+const paymentMethods = [
+  ...new Set([
+    ...basePaymentMethods,
+    "Unpaid / Pay Later",
+    "Cash on Delivery"
+  ])
+];
+
+function money(settings, value) {
+  return `${settings.currency || "Rs"} ${Math.round(Number(value || 0)).toLocaleString()}`;
+}
+
+function escapeXml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function realFoodPhoto(name, category) {
+  const key = `${name || ""} ${category || ""}`.toLowerCase();
+
+  if (key.includes("zinger")) return "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=900&q=80";
+  if (key.includes("beef") || key.includes("smash")) return "https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=900&q=80";
+  if (key.includes("burger")) return "https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?auto=format&fit=crop&w=900&q=80";
+
+  if (key.includes("fajita")) return "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?auto=format&fit=crop&w=900&q=80";
+  if (key.includes("pepperoni")) return "https://images.unsplash.com/photo-1628840042765-356cda07504e?auto=format&fit=crop&w=900&q=80";
+  if (key.includes("pizza")) return "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=900&q=80";
+
+  if (key.includes("broast") || key.includes("fried chicken") || key.includes("strips")) return "https://images.unsplash.com/photo-1562967914-608f82629710?auto=format&fit=crop&w=900&q=80";
+  if (key.includes("wings")) return "https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=900&q=80";
+  if (key.includes("tikka")) return "https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?auto=format&fit=crop&w=900&q=80";
+  if (key.includes("bbq") || key.includes("boti") || key.includes("kabab")) return "https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?auto=format&fit=crop&w=900&q=80";
+
+  if (key.includes("biryani")) return "https://images.unsplash.com/photo-1631515242808-497c3fbd3972?auto=format&fit=crop&w=900&q=80";
+  if (key.includes("pulao")) return "https://images.unsplash.com/photo-1563379091339-03246963d51a?auto=format&fit=crop&w=900&q=80";
+  if (key.includes("rice")) return "https://images.unsplash.com/photo-1603133872878-684f208fb84b?auto=format&fit=crop&w=900&q=80";
+
+  if (key.includes("karahi")) return "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=900&q=80";
+  if (key.includes("margarita") || key.includes("lime")) return "https://images.unsplash.com/photo-1546171753-97d7676e4602?auto=format&fit=crop&w=900&q=80";
+  if (key.includes("coffee")) return "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?auto=format&fit=crop&w=900&q=80";
+  if (key.includes("drink") || key.includes("soft")) return "https://images.unsplash.com/photo-1581006852262-e4307cf6283a?auto=format&fit=crop&w=900&q=80";
+
+  if (key.includes("brownie")) return "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=900&q=80";
+  if (key.includes("cheesecake")) return "https://images.unsplash.com/photo-1533134242443-d4fd215305ad?auto=format&fit=crop&w=900&q=80";
+  if (key.includes("cake")) return "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=900&q=80";
+  if (key.includes("ice cream")) return "https://images.unsplash.com/photo-1567206563064-6f60f40a2b57?auto=format&fit=crop&w=900&q=80";
+
+  if (key.includes("fries") || key.includes("combo")) return "https://images.unsplash.com/photo-1630384060421-cb20d0e0649d?auto=format&fit=crop&w=900&q=80";
+
+  return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80";
+}
+function createImageCard(title, subtitle, emoji, c1, c2) {
+  const svg = `
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520">
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="${c1}" />
+        <stop offset="100%" stop-color="${c2}" />
+      </linearGradient>
+    </defs>
+    <rect width="800" height="520" rx="42" fill="url(#g)"/>
+    <circle cx="660" cy="110" r="120" fill="rgba(255,255,255,.12)"/>
+    <circle cx="160" cy="420" r="170" fill="rgba(255,255,255,.08)"/>
+    <text x="60" y="180" font-size="92">${emoji}</text>
+    <text x="60" y="300" fill="white" font-size="54" font-weight="800" font-family="Arial, sans-serif">${escapeXml(title)}</text>
+    <text x="60" y="360" fill="rgba(255,255,255,.84)" font-size="28" font-family="Arial, sans-serif">${escapeXml(subtitle)}</text>
+    <rect x="60" y="402" width="220" height="52" rx="26" fill="rgba(255,255,255,.18)" />
+    <text x="96" y="438" fill="white" font-size="24" font-weight="700" font-family="Arial, sans-serif">NexaPOS Menu</text>
+  </svg>`;
+
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+const demoCatalog = [
+  {
+    name: "Burgers",
+    colors: ["#f97316", "#ef4444"],
+    products: [
+      ["Zinger Burger", "Crispy fillet with mayo and lettuce", 650, "🍔"],
+      ["Beef Smash Burger", "Double patty with cheese", 890, "🍔"],
+      ["Chicken Cheese Burger", "Grilled chicken and cheddar", 740, "🍔"],
+      ["Jalapeno Burger", "Spicy jalapeno and sauce", 780, "🌶️"]
+    ]
+  },
+  {
+    name: "Pizza",
+    colors: ["#f59e0b", "#dc2626"],
+    products: [
+      ["Chicken Fajita Pizza", "Loaded with spicy fajita chicken", 1390, "🍕"],
+      ["Pepperoni Pizza", "Classic pepperoni and mozzarella", 1550, "🍕"],
+      ["Crown Crust Pizza", "Premium crown crust special", 1790, "🍕"],
+      ["Cheese Lovers Pizza", "Extra cheese delight", 1490, "🧀"]
+    ]
+  },
+  {
+    name: "Broast",
+    colors: ["#eab308", "#f97316"],
+    products: [
+      ["Chicken Broast 2 Pc", "Crispy golden fried chicken", 560, "🍗"],
+      ["Chicken Broast 4 Pc", "Family size crispy chicken", 1090, "🍗"],
+      ["Chicken Strips", "Crunchy boneless strips", 680, "🍗"],
+      ["Spicy Wings", "Hot crispy wings", 590, "🔥"]
+    ]
+  },
+  {
+    name: "BBQ",
+    colors: ["#10b981", "#f97316"],
+    products: [
+      ["Chicken Tikka", "Charcoal tikka piece", 490, "🍢"],
+      ["Malai Boti", "Creamy boneless bbq", 980, "🍢"],
+      ["Seekh Kabab", "Juicy seekh kabab", 620, "🥙"],
+      ["Chicken Bihari Boti", "Tender spicy bihari boti", 1040, "🍢"]
+    ]
+  },
+  {
+    name: "Rice",
+    colors: ["#16a34a", "#65a30d"],
+    products: [
+      ["Chicken Biryani", "Traditional spicy biryani", 430, "🍛"],
+      ["Mutton Pulao", "Fragrant pulao with mutton", 780, "🍚"],
+      ["Chicken Fried Rice", "Chinese style fried rice", 620, "🍚"],
+      ["Thai Rice Bowl", "Rice bowl with sauce", 710, "🥡"]
+    ]
+  },
+  {
+    name: "Karahi",
+    colors: ["#dc2626", "#ea580c"],
+    products: [
+      ["Chicken Karahi Half", "Fresh karahi half", 1390, "🍲"],
+      ["Chicken Karahi Full", "Family size karahi", 2490, "🍲"],
+      ["Mutton Karahi Half", "Premium mutton karahi", 2090, "🍲"],
+      ["White Karahi", "Creamy white karahi", 1590, "🥘"]
+    ]
+  },
+  {
+    name: "Drinks",
+    colors: ["#06b6d4", "#2563eb"],
+    products: [
+      ["Mint Margarita", "Refreshing mint cooler", 290, "🥤"],
+      ["Cold Coffee", "Creamy iced coffee", 430, "☕"],
+      ["Fresh Lime", "Sweet and salty lime", 240, "🍋"],
+      ["Soft Drink Can", "Chilled beverage can", 180, "🥤"]
+    ]
+  },
+  {
+    name: "Desserts",
+    colors: ["#ec4899", "#8b5cf6"],
+    products: [
+      ["Chocolate Brownie", "Warm brownie with chocolate", 390, "🍫"],
+      ["Cheesecake Slice", "Creamy cheesecake", 520, "🍰"],
+      ["Lava Cake", "Molten chocolate center", 490, "🍮"],
+      ["Ice Cream Cup", "Vanilla ice cream cup", 260, "🍨"]
+    ]
+  },
+  {
+    name: "Combos",
+    colors: ["#0f766e", "#0ea5e9"],
+    products: [
+      ["Burger Combo", "Burger + fries + drink", 980, "🍟"],
+      ["Pizza Combo", "Mini pizza + drink", 1160, "🍕"],
+      ["Family Box", "Chicken, fries and drinks", 2890, "📦"],
+      ["Kids Combo", "Mini burger + juice", 590, "🧃"]
+    ]
+  }
+];
+
+const demoCategories = demoCatalog.map((group, index) => ({
+  id: `cat-${index + 1}`,
+  name: group.name,
+  isActive: true
+}));
+
+const demoItems = demoCatalog.flatMap((group, groupIndex) =>
+  group.products.map((entry, index) => ({
+    id: `item-${groupIndex + 1}-${index + 1}`,
+    categoryId: `cat-${groupIndex + 1}`,
+    category: group.name,
+    name: entry[0],
+    subtitle: entry[1],
+    price: entry[2],
+    emoji: entry[3],
+    isActive: true,
+    isAvailable: true,
+    image: realFoodPhoto(entry[0], group.name)
+  }))
+);
+
+function categoryEmoji(category) {
+  const key = String(category || "").toLowerCase();
+  if (key.includes("burger")) return "🍔";
+  if (key.includes("pizza")) return "🍕";
+  if (key.includes("bbq")) return "🍢";
+  if (key.includes("rice")) return "🍛";
+  if (key.includes("drink")) return "🥤";
+  if (key.includes("dessert")) return "🍰";
+  if (key.includes("broast")) return "🍗";
+  if (key.includes("karahi")) return "🍲";
+  if (key.includes("combo")) return "📦";
+  return "🍽️";
+}
+
+function paletteFromName(text) {
+  const palettes = [
+    ["#0ea5e9", "#2563eb"],
+    ["#f97316", "#ef4444"],
+    ["#10b981", "#0f766e"],
+    ["#8b5cf6", "#ec4899"],
+    ["#eab308", "#f59e0b"],
+    ["#14b8a6", "#06b6d4"]
+  ];
+  let sum = 0;
+  String(text || "")
+    .split("")
+    .forEach((char) => {
+      sum += char.charCodeAt(0);
+    });
+  return palettes[sum % palettes.length];
+}
+
+function attachImages(items) {
+  return (items || []).map((item) => {
+    if (item.image || item.imageUrl) {
+      return {
+        ...item,
+        image: item.image || item.imageUrl
+      };
+    }
+
+    const palette = paletteFromName(item.name || item.category);
+    return {
+      ...item,
+      image: createImageCard(
+        item.name || "Menu Item",
+        item.subtitle || item.category || "Fresh Kitchen Item",
+        item.emoji || categoryEmoji(item.category),
+        palette[0],
+        palette[1]
+      )
+    };
+  });
+}
+
+function paymentMeta(method) {
+  const key = String(method || "").toLowerCase();
+
+  if (key.includes("cash")) {
+    return { icon: "💵", title: "Cash", subtitle: "Cash Payment", bg: "linear-gradient(135deg,#22c55e,#16a34a)" };
+  }
+  if (key.includes("card")) {
+    return { icon: "💳", title: "Card", subtitle: "POS / Visa / Master", bg: "linear-gradient(135deg,#3b82f6,#1d4ed8)" };
+  }
+  if (key.includes("easy")) {
+    return { icon: "📱", title: "Easypaisa", subtitle: "Wallet Payment", bg: "linear-gradient(135deg,#16a34a,#0f766e)" };
+  }
+  if (key.includes("jazz")) {
+    return { icon: "📲", title: "JazzCash", subtitle: "Mobile Wallet", bg: "linear-gradient(135deg,#ef4444,#b91c1c)" };
+  }
+  if (key.includes("bank")) {
+    return { icon: "🏦", title: "Bank", subtitle: "Bank Transfer", bg: "linear-gradient(135deg,#9333ea,#6d28d9)" };
+  }
+  if (key.includes("complimentary")) {
+    return { icon: "🎁", title: "Complimentary", subtitle: "Free / VIP", bg: "linear-gradient(135deg,#f59e0b,#ea580c)" };
+  }
+
+  return { icon: "💰", title: method, subtitle: "Payment Method", bg: "linear-gradient(135deg,#475569,#0f172a)" };
+}
+
+function StaffSelect({ label, value, onChange, options, placeholder }) {
+  return (
+    <label className="pos-field">
+      <span className="pos-label">{label}</span>
+      <select className="pos-input" value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{placeholder || "Select"}</option>
+        {(options || []).map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.name} - {item.shift}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function SummaryRow({ label, value, strong, success }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 10,
+        color: success ? "#86efac" : strong ? "white" : "#cbd5e1",
+        fontWeight: strong ? 950 : 700,
+        fontSize: strong ? 15 : 13
+      }}
+    >
+      <span>{label}</span>
+      <span>{value}</span>
+    </div>
+  );
+}
+
+function ModalShell({ title, onClose, children, wide }) {
+  return (
+    <div className="pos-modal-backdrop">
+      <div className={`pos-modal-card ${wide ? "wide" : ""}`}>
+        <div className="pos-modal-head">
+          <div>
+            <h3 style={{ margin: 0 }}>{title}</h3>
+            <div style={{ color: "#94a3b8", marginTop: 4, fontSize: 13, fontWeight: 700 }}>
+              Premium checkout control center
+            </div>
+          </div>
+
+          <button className="pos-ghost-btn pos-modal-close" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+
+        <div className="pos-modal-body">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PhoneModal({ phone, setPhone, onClose, onDone }) {
+  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "0", "⌫"];
+
+  function press(key) {
+    if (key === "⌫") {
+      setPhone(phone.slice(0, -1));
+      return;
+    }
+    setPhone(phone + key);
+  }
+
+  return (
+    <ModalShell title="Phone Number" onClose={onClose}>
+      <div className="pos-keypad-screen">{phone || "Enter phone number..."}</div>
+      <div className="pos-keypad-grid">
+        {keys.map((key) => (
+          <button key={key} className="pos-keypad-btn" onClick={() => press(key)}>
+            {key}
+          </button>
+        ))}
+      </div>
+      <button className="pos-primary-btn full" onClick={onDone}>
+        Save Phone
+      </button>
+    </ModalShell>
+  );
+}
+
+function CustomerModal({ customer, setCustomer, onClose }) {
+  function setField(key, value) {
+    setCustomer((prev) => ({ ...prev, [key]: value }));
+  }
+
+  return (
+    <ModalShell title="Customer Information" onClose={onClose}>
+      <div className="pos-form-grid">
+        <label className="pos-field">
+          <span className="pos-label">First Name</span>
+          <input className="pos-input" value={customer.firstName} onChange={(e) => setField("firstName", e.target.value)} />
+        </label>
+
+        <label className="pos-field">
+          <span className="pos-label">Last Name</span>
+          <input className="pos-input" value={customer.lastName} onChange={(e) => setField("lastName", e.target.value)} />
+        </label>
+      </div>
+
+      <label className="pos-field">
+        <span className="pos-label">Email</span>
+        <input className="pos-input" value={customer.email} onChange={(e) => setField("email", e.target.value)} />
+      </label>
+
+      <label className="pos-field">
+        <span className="pos-label">Order Instructions</span>
+        <input
+          className="pos-input"
+          value={customer.instructions}
+          onChange={(e) => setField("instructions", e.target.value)}
+          placeholder="Less spicy, no onion, extra sauce..."
+        />
+      </label>
+
+      <button className="pos-primary-btn full" onClick={onClose}>
+        Save Customer
+      </button>
+    </ModalShell>
+  );
+}
+
+function PaymentModal({
+  settings,
+  subtotal,
+  taxAmount,
+  serviceChargeAmount,
+  grandTotal,
+  discountResult,
+  couponCode,
+  setCouponCode,
+  selectedPaymentMethod,
+  setSelectedPaymentMethod,
+  saving,
+  calculatingDiscount,
+  loyaltyCustomer,
+  loyaltyLookupLoading,
+  loyaltyRedeemPoints,
+  setLoyaltyRedeemPoints,
+  loyaltyRedeemAmount,
+  finalPayableAfterLoyalty,
+  phone,
+  onLookupCustomer,
+  onClose,
+  onRecalculate,
+  onComplete
+}) {
+  const finalDiscount = Number(discountResult?.totalDiscount || 0);
+  const discountedSubtotal = Math.max(0, subtotal - finalDiscount);
+  const availablePoints = Number(loyaltyCustomer?.loyaltyPoints || 0);
+  const maxRedeem = Math.min(availablePoints, Math.floor(grandTotal));
+
+  return (
+    <ModalShell title="Order Confirmation & Checkout" onClose={onClose} wide>
+      <div className="pos-payment-layout">
+        <div>
+          <div className="pos-pay-hero">
+            <div className="pos-pay-hero-sub">Final Payable</div>
+            <div className="pos-pay-hero-amount">{money(settings, finalPayableAfterLoyalty)}</div>
+            <div className="pos-pay-hero-note">
+              Choose payment option and confirm order
+            </div>
+          </div>
+
+          <div className="pos-section-title">Payment Methods</div>
+          <div className="pos-pay-grid">
+            {paymentMethods.map((method) => {
+              const meta = paymentMeta(method);
+              return (
+                <button
+                  key={method}
+                  className={`pos-pay-card ${selectedPaymentMethod === method ? "active" : ""}`}
+                  onClick={() => {
+                    setSelectedPaymentMethod(method);
+                    setTimeout(() => onRecalculate(method), 20);
+                  }}
+                >
+                  <div className="pos-pay-icon" style={{ background: meta.bg }}>
+                    {meta.icon}
+                  </div>
+                  <div className="pos-pay-text">
+                    <strong>{meta.title}</strong>
+                    <span>{meta.subtitle}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="pos-section-title" style={{ marginTop: 16 }}>Coupon / Discount</div>
+          <div className="pos-inline-grid">
+            <input
+              className="pos-input"
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+              placeholder="Enter coupon code"
+            />
+            <button
+              className="pos-primary-btn"
+              onClick={() => onRecalculate(selectedPaymentMethod)}
+              disabled={calculatingDiscount}
+            >
+              {calculatingDiscount ? "Checking..." : "Apply"}
+            </button>
+          </div>
+
+          <div className="pos-section-title" style={{ marginTop: 16 }}>Loyalty / Wallet</div>
+          <div className="pos-loyalty-box">
+            <div className="pos-inline-grid">
+              <button
+                className="pos-soft-btn"
+                onClick={() => onLookupCustomer(phone)}
+                disabled={!phone || loyaltyLookupLoading}
+              >
+                {loyaltyLookupLoading ? "Checking..." : "Check Customer Points"}
+              </button>
+            </div>
+
+            {loyaltyCustomer ? (
+              <>
+                <div className="pos-loyalty-user">
+                  <div>
+                    <strong>{loyaltyCustomer.name}</strong>
+                    <div style={{ color: "#cbd5e1", marginTop: 4 }}>
+                      Phone: {loyaltyCustomer.phone}
+                    </div>
+                  </div>
+                  <div className="pos-loyalty-points">
+                    {loyaltyCustomer.loyaltyPoints || 0} pts
+                  </div>
+                </div>
+
+                <div className="pos-inline-grid" style={{ marginTop: 10 }}>
+                  <input
+                    className="pos-input"
+                    type="number"
+                    value={loyaltyRedeemPoints}
+                    onChange={(e) => {
+                      const raw = Number(e.target.value || 0);
+                      const safe = Math.max(0, Math.min(maxRedeem, raw));
+                      setLoyaltyRedeemPoints(String(safe));
+                    }}
+                    placeholder="Redeem points"
+                  />
+                  <button className="pos-primary-btn" onClick={() => setLoyaltyRedeemPoints(String(maxRedeem))}>
+                    Max
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={{ color: "#cbd5e1", marginTop: 10 }}>
+                Add customer phone, then check loyalty balance.
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="pos-payment-summary">
+          <h3 style={{ marginTop: 0 }}>Bill Summary</h3>
+
+          <div className="pos-summary-stack">
+            <SummaryRow label="Subtotal" value={money(settings, subtotal)} />
+            <SummaryRow label="Discount" value={`- ${money(settings, finalDiscount)}`} success={finalDiscount > 0} />
+            <SummaryRow label="After Discount" value={money(settings, discountedSubtotal)} />
+            <SummaryRow label={`${settings.taxName || "GST"} (${settings.taxPercent || 0}%)`} value={money(settings, taxAmount)} />
+            <SummaryRow label={`${settings.serviceChargeName || "Service"} (${settings.serviceChargePercent || 0}%)`} value={money(settings, serviceChargeAmount)} />
+            <SummaryRow label="Loyalty Redeem" value={`- ${money(settings, loyaltyRedeemAmount)}`} success={loyaltyRedeemAmount > 0} />
+            <div style={{ height: 1, background: "rgba(255,255,255,.12)", margin: "4px 0" }} />
+            <SummaryRow label="Grand Total" value={money(settings, finalPayableAfterLoyalty)} strong />
+          </div>
+
+          <button
+            className="pos-primary-btn full"
+            disabled={saving}
+            onClick={() => onComplete(selectedPaymentMethod, finalPayableAfterLoyalty, finalDiscount, discountResult)}
+          >
+            {saving ? "Saving..." : `Confirm & Pay ${money(settings, finalPayableAfterLoyalty)}`}
+          </button>
+
+          <button className="pos-soft-btn full" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+export default function POSScreen({ token, module, session, onBack }) {
+  const [settings, setSettings] = useState(defaultRestaurantSettings);
+  const [categories, setCategories] = useState([]);
+  const [menuItems, setMenuItems] = useState([]);
+  const [activeCategoryId, setActiveCategoryId] = useState("");
+  const [search, setSearch] = useState("");
+
+  const [staffData, setStaffData] = useState({
+    staff: [],
+    waiters: [],
+    riders: [],
+    cashiers: [],
+    kitchen: [],
+    managers: []
+  });
+
+  const [selectedWaiterId, setSelectedWaiterId] = useState("");
+  const [selectedRiderId, setSelectedRiderId] = useState("");
+  const [selectedCashierId, setSelectedCashierId] = useState("");
+
+  const [cart, setCart] = useState([]);
+  const [phoneModal, setPhoneModal] = useState(false);
+  const [customerModal, setCustomerModal] = useState(false);
+  const [paymentModal, setPaymentModal] = useState(false);
+
+  const [phone, setPhone] = useState(module?.driveThruTicket?.phone || "");
+  const [customer, setCustomer] = useState({
+    firstName: module?.driveThruTicket?.customerName || "",
+    lastName: "",
+    email: "",
+    instructions: module?.driveThruTicket
+      ? `Drive Thru ${module.driveThruTicket.tokenNo} · ${module.driveThruTicket.vehicleNo || "No vehicle no"}`
+      : ""
+  });
+
+  const [lastReceiptOrder, setLastReceiptOrder] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [calculatingDiscount, setCalculatingDiscount] = useState(false);
+  const [discountResult, setDiscountResult] = useState(null);
+  const [couponCode, setCouponCode] = useState("");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(paymentMethods[0] || "Cash");
+
+  const [loyaltyLookupLoading, setLoyaltyLookupLoading] = useState(false);
+  const [loyaltyCustomer, setLoyaltyCustomer] = useState(null);
+  const [loyaltyRedeemPoints, setLoyaltyRedeemPoints] = useState("");
+
+  const driveThruTicket = module?.driveThruTicket || null;
+
+  const rawMode = module?.modeKey || getOrderMode(module);
+  const orderMode =
+    rawMode === "walk_in" || rawMode === "kiosk"
+      ? "take_away"
+      : rawMode;
+
+  const screenTitle = module?.name || formatMode(rawMode || orderMode || "POS");
+
+  useEffect(() => {
+    loadSettings();
+    loadMenu();
+    loadStaff();
+
+    if (driveThruTicket?.phone) {
+      setTimeout(() => lookupCustomerByPhone(driveThruTicket.phone), 400);
+    }
+  }, []);
+
+  async function loadSettings() {
+    try {
+      const res = await api(token).get("/api/restaurant-settings");
+      setSettings({ ...defaultRestaurantSettings, ...(res.data.settings || {}) });
+    } catch {
+      setSettings({
+        ...defaultRestaurantSettings,
+        restaurantName: session?.tenant?.restaurantName || "Nexa Restaurant",
+        brandTitle: session?.tenant?.restaurantName || "Nexa Restaurant",
+        receiptTitle: session?.tenant?.restaurantName || "Nexa Restaurant"
+      });
+    }
+  }
+
+  async function loadMenu() {
+    try {
+      const res = await api(token).get("/api/menu");
+      const apiCategories = (res.data.categories || []).filter((c) => c.isActive !== false);
+      const apiItems = (res.data.items || []).filter((i) => i.isActive !== false && i.isAvailable !== false);
+
+      const baseItems = apiItems.length ? apiItems : demoItems;
+
+      const categoryMap = new Map();
+
+      if (apiCategories.length) {
+        apiCategories.forEach((category) => {
+          categoryMap.set(category.id, category);
+        });
+      }
+
+      baseItems.forEach((item) => {
+        const categoryName = item.category || item.categoryName || "Menu";
+        const categoryId = item.categoryId || `cat-${categoryName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+
+        if (!categoryMap.has(categoryId)) {
+          categoryMap.set(categoryId, {
+            id: categoryId,
+            name: categoryName,
+            isActive: true
+          });
+        }
+      });
+
+      const finalCategories = [
+        { id: "all", name: "All Items", isActive: true },
+        ...Array.from(categoryMap.values())
+      ];
+
+      const normalizedItems = baseItems.map((item, index) => {
+        const categoryName = item.category || item.categoryName || "Menu";
+        const categoryId = item.categoryId || `cat-${categoryName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+
+        return {
+          ...item,
+          id: item.id || `menu-item-${index}`,
+          categoryId,
+          category: categoryName,
+          price: Number(item.price || 0),
+          image: item.image || item.imageUrl || realFoodPhoto(item.name, categoryName)
+        };
+      });
+
+      setCategories(finalCategories);
+      setMenuItems(attachImages(normalizedItems));
+      setActiveCategoryId("all");
+    } catch {
+      const finalCategories = [
+        { id: "all", name: "All Items", isActive: true },
+        ...demoCategories
+      ];
+
+      setCategories(finalCategories);
+      setMenuItems(attachImages(demoItems));
+      setActiveCategoryId("all");
+    }
+  }
+
+  async function loadStaff() {
+    try {
+      const res = await api(token).get("/api/staff/active");
+      const data = res.data || {};
+      setStaffData({
+        staff: data.staff || [],
+        waiters: data.waiters || [],
+        riders: data.riders || [],
+        cashiers: data.cashiers || [],
+        kitchen: data.kitchen || [],
+        managers: data.managers || []
+      });
+
+      if (!selectedWaiterId && data.waiters?.length) setSelectedWaiterId(data.waiters[0].id);
+      if (!selectedRiderId && data.riders?.length) setSelectedRiderId(data.riders[0].id);
+      if (!selectedCashierId && data.cashiers?.length) setSelectedCashierId(data.cashiers[0].id);
+    } catch {
+      setStaffData({
+        staff: [],
+        waiters: [],
+        riders: [],
+        cashiers: [],
+        kitchen: [],
+        managers: []
+      });
+    }
+  }
+
+  const selectedWaiter = staffData.waiters.find((item) => item.id === selectedWaiterId) || null;
+  const selectedRider = staffData.riders.find((item) => item.id === selectedRiderId) || null;
+  const selectedCashier = staffData.cashiers.find((item) => item.id === selectedCashierId) || null;
+
+  const activeCategory = categories.find((cat) => cat.id === activeCategoryId);
+
+  const visibleItems = useMemo(() => {
+    return menuItems.filter((item) => {
+      const selectedCategory = categories.find((cat) => cat.id === activeCategoryId);
+      const selectedName = String(selectedCategory?.name || "").toLowerCase();
+
+      const itemCategoryId = String(item.categoryId || "");
+      const itemCategoryName = String(item.category || item.categoryName || "").toLowerCase();
+
+      const byCategory =
+        activeCategoryId === "all" ||
+        !activeCategoryId ||
+        itemCategoryId === activeCategoryId ||
+        itemCategoryName === selectedName;
+
+      const q = search.trim().toLowerCase();
+
+      const bySearch =
+        !q ||
+        String(item.name || "").toLowerCase().includes(q) ||
+        String(item.category || "").toLowerCase().includes(q) ||
+        String(item.subtitle || "").toLowerCase().includes(q);
+
+      return byCategory && bySearch;
+    });
+  }, [menuItems, categories, activeCategoryId, search]);
+
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const totalDiscount = Number(discountResult?.totalDiscount || 0);
+  const discountedSubtotal = Math.max(0, subtotal - totalDiscount);
+  const taxAmount = Math.round(discountedSubtotal * (Number(settings.taxPercent || 0) / 100));
+  const serviceChargeAmount = Math.round(discountedSubtotal * (Number(settings.serviceChargePercent || 0) / 100));
+  const finalTotalBeforeLoyalty = discountedSubtotal + taxAmount + serviceChargeAmount;
+
+  const loyaltyRedeemAmount = Math.min(
+    Number(loyaltyRedeemPoints || 0),
+    Number(loyaltyCustomer?.loyaltyPoints || 0),
+    Math.floor(finalTotalBeforeLoyalty)
+  );
+
+  const finalTotal = Math.max(0, finalTotalBeforeLoyalty - loyaltyRedeemAmount);
+
+  function addToCart(item) {
+    setCart((prev) => {
+      const found = prev.find((x) => x.id === item.id);
+      if (found) {
+        return prev.map((x) => (x.id === item.id ? { ...x, qty: x.qty + 1 } : x));
+      }
+      return [...prev, { ...item, qty: 1 }];
+    });
+    setDiscountResult(null);
+  }
+
+  function changeQty(id, delta) {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, qty: Math.max(1, item.qty + delta) } : item
+      )
+    );
+    setDiscountResult(null);
+  }
+
+  function removeItem(id) {
+    setCart((prev) => prev.filter((item) => item.id !== id));
+    setDiscountResult(null);
+  }
+
+  async function lookupCustomerByPhone(phoneValue = phone) {
+    if (!phoneValue) return null;
+
+    setLoyaltyLookupLoading(true);
+
+    try {
+      const res = await api(token).get(`/api/loyalty/customer?phone=${encodeURIComponent(phoneValue)}`);
+      const found = res.data.customer || null;
+      setLoyaltyCustomer(found);
+
+      if (found) {
+        setCustomer((prev) => ({
+          ...prev,
+          firstName: found.firstName || prev.firstName || "",
+          lastName: found.lastName || prev.lastName || "",
+          email: found.email || prev.email || ""
+        }));
+      }
+
+      return found;
+    } catch (error) {
+      setLoyaltyCustomer(null);
+      setLoyaltyRedeemPoints("");
+
+      if (error.response?.status !== 404) {
+        alert(error.response?.data?.message || "Failed to lookup loyalty customer.");
+      }
+
+      return null;
+    } finally {
+      setLoyaltyLookupLoading(false);
+    }
+  }
+
+  async function calculateDiscounts(methodOverride) {
+    if (!cart.length) {
+      setDiscountResult(null);
+      return null;
+    }
+
+    setCalculatingDiscount(true);
+
+    try {
+      const paymentMethod = methodOverride || selectedPaymentMethod;
+      const res = await api(token).post("/api/discounts/calculate", {
+        subtotal,
+        items: cart,
+        paymentMethod,
+        couponCode
+      });
+
+      setDiscountResult(res.data);
+      return res.data;
+    } catch (error) {
+      setDiscountResult(null);
+      alert(error.response?.data?.message || "Failed to calculate discounts.");
+      return null;
+    } finally {
+      setCalculatingDiscount(false);
+    }
+  }
+
+  async function openPayment() {
+    if (!cart.length) {
+      alert("Cart is empty.");
+      return;
+    }
+
+    setPaymentModal(true);
+    await calculateDiscounts(selectedPaymentMethod);
+
+    if (phone) {
+      await lookupCustomerByPhone(phone);
+    }
+  }
+
+  async function redeemLoyaltyAfterOrder(savedOrder) {
+    if (!loyaltyCustomer || loyaltyRedeemAmount <= 0) return;
+
+    try {
+      await api(token).post("/api/loyalty/redeem", {
+        phone,
+        points: loyaltyRedeemAmount,
+        amount: loyaltyRedeemAmount,
+        orderId: savedOrder.id || "",
+        orderNo: savedOrder.orderNo || "",
+        note: `Redeemed ${loyaltyRedeemAmount} points from POS payment`
+      });
+    } catch (error) {
+      console.warn("Loyalty redeem failed:", error.response?.data?.message || error.message);
+    }
+  }
+
+  async function updateDriveThruTicketAfterOrder(savedOrder) {
+    if (!driveThruTicket?.id) return;
+
+    try {
+      await api(token).patch(`/api/drive-thru/${driveThruTicket.id}`, {
+        status: "preparing",
+        orderId: savedOrder.id || "",
+        orderNo: savedOrder.orderNo || "",
+        total: savedOrder.total || 0,
+        phone: savedOrder.phone || driveThruTicket.phone || "",
+        customerName:
+          `${savedOrder.customer?.firstName || ""} ${savedOrder.customer?.lastName || ""}`.trim() ||
+          driveThruTicket.customerName ||
+          "Drive Thru Customer"
+      });
+    } catch (error) {
+      console.warn("Drive thru update failed:", error.response?.data?.message || error.message);
+    }
+  }
+
+  async function saveOrder({
+    paymentStatus,
+    paymentMethod,
+    orderStatus,
+    kitchenStatus,
+    payableTotal,
+    discountAmount,
+    discounts
+  }) {
+    if (!cart.length) {
+      alert("Cart is empty.");
+      return;
+    }
+
+    if (orderMode === "dine_in" && !selectedWaiterId) {
+      alert("Please select waiter for dine in.");
+      return;
+    }
+
+    if (orderMode === "delivery" && !selectedRiderId) {
+      alert("Please select rider for delivery.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const finalDiscountData = discounts || discountResult;
+      const systemDiscountAmount = Number(discountAmount ?? finalDiscountData?.totalDiscount ?? 0);
+      const finalDiscountedSubtotal = Math.max(0, subtotal - systemDiscountAmount);
+      const finalTax = Math.round(finalDiscountedSubtotal * (Number(settings.taxPercent || 0) / 100));
+      const finalService = Math.round(finalDiscountedSubtotal * (Number(settings.serviceChargePercent || 0) / 100));
+      const redeemAmount = paymentStatus === "paid" ? loyaltyRedeemAmount : 0;
+      const finalPayable = Math.max(0, Number(payableTotal ?? finalDiscountedSubtotal + finalTax + finalService) - redeemAmount);
+
+      const payload = {
+        mode: orderMode,
+        table: module.table || null,
+        driveThru: driveThruTicket
+          ? {
+              ticketId: driveThruTicket.id,
+              tokenNo: driveThruTicket.tokenNo,
+              vehicleNo: driveThruTicket.vehicleNo || "",
+              vehicleColor: driveThruTicket.vehicleColor || "",
+              vehicleType: driveThruTicket.vehicleType || "",
+              notes: driveThruTicket.notes || ""
+            }
+          : null,
+        driveThruTokenNo: driveThruTicket?.tokenNo || "",
+        driveThruVehicleNo: driveThruTicket?.vehicleNo || "",
+        driveThruVehicleColor: driveThruTicket?.vehicleColor || "",
+        driveThruVehicleType: driveThruTicket?.vehicleType || "",
+        items: cart,
+        customer,
+        phone,
+        staff: {
+          waiter: selectedWaiter,
+          rider: selectedRider,
+          cashier: selectedCashier
+        },
+        waiterId: selectedWaiterId,
+        riderId: selectedRiderId,
+        cashierId: selectedCashierId,
+        waiterName: selectedWaiter?.name || "",
+        riderName: selectedRider?.name || "",
+        cashierName: selectedCashier?.name || "",
+        subtotal,
+        tax: finalTax,
+        total: finalPayable,
+        originalTotal: subtotal + finalTax + finalService,
+        discountAmount: systemDiscountAmount + redeemAmount,
+        systemDiscountAmount,
+        loyaltyRedeemedPoints: redeemAmount,
+        loyaltyRedeemedAmount: redeemAmount,
+        discountsApplied: finalDiscountData?.applied || [],
+        couponCode,
+        taxName: settings.taxName || "GST",
+        taxPercent: Number(settings.taxPercent || 0),
+        serviceChargeName: settings.serviceChargeName || "Service Charges",
+        serviceChargePercent: Number(settings.serviceChargePercent || 0),
+        serviceChargeAmount: finalService,
+        currency: settings.currency || "Rs",
+        restaurantSettings: settings,
+        paymentMethod,
+        paymentStatus,
+        orderStatus,
+        kitchenStatus,
+        orderInstructions: customer.instructions || "",
+        createdAt: new Date().toISOString()
+      };
+
+      const orderSaveResponse = await api(token).post("/api/orders", payload);
+
+      const savedOrder = {
+        ...payload,
+        id: orderSaveResponse.data?.order?.id || orderSaveResponse.data?.id || "",
+        orderNo: orderSaveResponse.data?.order?.orderNo || orderSaveResponse.data?.orderNo || "N/A"
+      };
+
+      if (payload.paymentStatus === "paid" || payload.paymentStatus === "complimentary") {
+        try {
+          await api(token).post("/api/inventory-movements/deduct-order", {
+            order: savedOrder
+          });
+        } catch (error) {
+          console.warn("Inventory deduction failed:", error.response?.data?.message || error.message);
+        }
+      }
+
+      try {
+        await api(token).post("/api/customers/from-order", {
+          order: savedOrder
+        });
+      } catch (error) {
+        console.warn("Customer save failed:", error.response?.data?.message || error.message);
+      }
+
+      if (payload.paymentStatus === "paid") {
+        await redeemLoyaltyAfterOrder(savedOrder);
+      }
+
+      await updateDriveThruTicketAfterOrder(savedOrder);
+
+      if (payload.paymentStatus === "paid" || payload.paymentStatus === "complimentary") {
+        setLastReceiptOrder(savedOrder);
+      }
+
+      alert(
+        paymentStatus === "paid"
+          ? "Order paid successfully."
+          : "Order saved successfully."
+      );
+
+      setCart([]);
+      setCouponCode("");
+      setDiscountResult(null);
+      setLoyaltyCustomer(null);
+      setLoyaltyRedeemPoints("");
+      setPaymentModal(false);
+
+      if (!driveThruTicket) {
+        setPhone("");
+        setCustomer({
+          firstName: "",
+          lastName: "",
+          email: "",
+          instructions: ""
+        });
+      }
+    } catch (error) {
+      alert(error.response?.data?.message || "Failed to save order.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="pro-pos-shell">
+      <style>
+        {`
+          .pro-pos-shell {
+            min-height: 100vh;
+            padding: 14px;
+            background:
+              radial-gradient(circle at 10% 15%, rgba(34,211,238,.10), transparent 25%),
+              radial-gradient(circle at 90% 20%, rgba(168,85,247,.12), transparent 25%),
+              linear-gradient(180deg, #020617 0%, #071028 100%);
+            color: white;
+          }
+
+          .pro-pos-layout {
+            display: grid;
+            grid-template-columns: 300px 1fr 420px;
+            gap: 14px;
+            min-height: calc(100vh - 28px);
+          }
+
+          .pro-panel {
+            border-radius: 28px;
+            background: rgba(15,23,42,.75);
+            border: 1px solid rgba(255,255,255,.10);
+            box-shadow: 0 20px 50px rgba(0,0,0,.22);
+            backdrop-filter: blur(16px);
+          }
+
+          .pos-left {
+            padding: 16px;
+            display: grid;
+            gap: 14px;
+            align-self: start;
+          }
+
+          .pos-back-btn,
+          .pos-soft-btn,
+          .pos-ghost-btn,
+          .pos-primary-btn {
+            border: 0;
+            border-radius: 16px;
+            cursor: pointer;
+            font-weight: 900;
+            transition: .18s ease;
+          }
+
+          .pos-back-btn {
+            height: 48px;
+            background: rgba(255,255,255,.08);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+          }
+
+          .pos-back-btn:hover,
+          .pos-soft-btn:hover,
+          .pos-primary-btn:hover,
+          .pos-ghost-btn:hover {
+            transform: translateY(-2px);
+          }
+
+          .pos-primary-btn {
+            height: 46px;
+            padding: 0 16px;
+            background: linear-gradient(135deg,#06b6d4,#2563eb);
+            color: white;
+          }
+
+          .pos-soft-btn {
+            height: 46px;
+            padding: 0 16px;
+            background: rgba(255,255,255,.08);
+            color: white;
+            border: 1px solid rgba(255,255,255,.10);
+          }
+
+          .pos-ghost-btn {
+            width: 40px;
+            height: 40px;
+            background: rgba(255,255,255,.08);
+            color: white;
+          }
+
+          .pos-primary-btn.full,
+          .pos-soft-btn.full {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .pos-title-card {
+            padding: 16px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, rgba(34,211,238,.18), rgba(168,85,247,.18));
+            border: 1px solid rgba(255,255,255,.10);
+          }
+
+          .pos-mode-title {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 1000;
+            letter-spacing: -.04em;
+          }
+
+          .pos-small-muted {
+            color: #cbd5e1;
+            font-size: 13px;
+          }
+
+          .pos-chip-wrap {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+          }
+
+          .pos-chip {
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.08);
+            border: 1px solid rgba(255,255,255,.10);
+            font-size: 12px;
+            font-weight: 800;
+            color: #e2e8f0;
+          }
+
+          .pos-field {
+            display: grid;
+            gap: 8px;
+          }
+
+          .pos-label {
+            font-size: 12px;
+            font-weight: 800;
+            color: #cbd5e1;
+          }
+
+          .pos-input {
+            width: 100%;
+            height: 46px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.07);
+            color: white;
+            padding: 0 14px;
+            outline: none;
+          }
+
+          .pos-input::placeholder {
+            color: #94a3b8;
+          }
+
+          .pos-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+          }
+
+          .pos-menu-zone {
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            overflow: hidden;
+          }
+
+          .pos-menu-head {
+            padding: 16px 16px 10px;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+            display: grid;
+            gap: 12px;
+          }
+
+          .pos-brand-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            justify-content: space-between;
+            flex-wrap: wrap;
+          }
+
+          .pos-brand-badge {
+            padding: 10px 16px;
+            border-radius: 16px;
+            background: linear-gradient(135deg,#581c87,#0891b2);
+            font-weight: 950;
+          }
+
+          .pos-search-row {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: 10px;
+          }
+
+          .pos-category-row {
+            padding: 10px 16px 12px;
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+          }
+
+          .pos-cat-btn {
+            white-space: nowrap;
+            height: 42px;
+            padding: 0 16px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.06);
+            color: white;
+            font-weight: 900;
+            cursor: pointer;
+          }
+
+          .pos-cat-btn.active {
+            background: linear-gradient(135deg,#0ea5e9,#2563eb);
+          }
+
+          .pos-menu-scroll {
+            overflow-y: auto;
+            padding: 16px;
+          }
+
+          .pos-products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 16px;
+          }
+
+          .pos-product-card {
+            border-radius: 24px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.05);
+            box-shadow: 0 16px 32px rgba(0,0,0,.16);
+            transition: .2s ease;
+          }
+
+          .pos-product-card:hover {
+            transform: translateY(-6px);
+          }
+
+          .pos-product-image {
+            height: 148px;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+          }
+
+          .pos-product-image::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(2,6,23,.02), rgba(2,6,23,.58));
+          }
+
+          .pos-product-emoji {
+            position: absolute;
+            left: 12px;
+            top: 12px;
+            z-index: 2;
+            width: 40px;
+            height: 40px;
+            border-radius: 14px;
+            background: rgba(2,6,23,.55);
+            display: grid;
+            place-items: center;
+            font-size: 24px;
+          }
+
+          .pos-product-price {
+            position: absolute;
+            left: 12px;
+            bottom: 12px;
+            z-index: 2;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(2,6,23,.68);
+            color: white;
+            font-weight: 950;
+            font-size: 13px;
+          }
+
+          .pos-product-add {
+            position: absolute;
+            right: 12px;
+            bottom: 12px;
+            z-index: 2;
+            width: 46px;
+            height: 46px;
+            border-radius: 16px;
+            border: 0;
+            background: linear-gradient(135deg,#facc15,#f97316);
+            font-size: 26px;
+            font-weight: 900;
+            cursor: pointer;
+          }
+
+          .pos-product-body {
+            padding: 14px;
+          }
+
+          .pos-product-name {
+            margin: 0;
+            font-size: 17px;
+            font-weight: 950;
+          }
+
+          .pos-product-sub {
+            margin: 6px 0 0;
+            color: #cbd5e1;
+            font-size: 12px;
+            line-height: 1.4;
+            min-height: 34px;
+          }
+
+          .pos-cart {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            overflow: hidden;
+          }
+
+          .pos-cart-head {
+            padding: 16px;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+            display: grid;
+            gap: 12px;
+          }
+
+          .pos-cart-scroll {
+            overflow-y: auto;
+            padding: 16px;
+          }
+
+          .pos-empty-cart {
+            height: 100%;
+            display: grid;
+            place-items: center;
+            text-align: center;
+            color: #94a3b8;
+          }
+
+          .pos-cart-item {
+            padding: 12px;
+            border-radius: 18px;
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(255,255,255,.10);
+            display: grid;
+            gap: 10px;
+            margin-bottom: 12px;
+          }
+
+          .pos-cart-item-top {
+            display: grid;
+            grid-template-columns: 54px 1fr auto;
+            gap: 10px;
+            align-items: center;
+          }
+
+          .pos-cart-thumb {
+            width: 54px;
+            height: 54px;
+            border-radius: 16px;
+            background-size: cover;
+            background-position: center;
+            border: 1px solid rgba(255,255,255,.12);
+          }
+
+          .pos-cart-item-name {
+            font-weight: 950;
+          }
+
+          .pos-cart-item-sub {
+            color: #cbd5e1;
+            font-size: 12px;
+            margin-top: 4px;
+          }
+
+          .pos-remove-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            border: 0;
+            background: rgba(239,68,68,.16);
+            color: #fecaca;
+            cursor: pointer;
+          }
+
+          .pos-qty-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+          }
+
+          .pos-qty-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+
+          .pos-qty-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            border: 0;
+            background: rgba(255,255,255,.10);
+            color: white;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: 900;
+          }
+
+          .pos-cart-foot {
+            padding: 16px;
+            border-top: 1px solid rgba(255,255,255,.08);
+            display: grid;
+            gap: 10px;
+          }
+
+          .pos-summary-stack {
+            display: grid;
+            gap: 8px;
+          }
+
+          .pos-pay-actions {
+            display: grid;
+            grid-template-columns: 1fr 1.3fr;
+            gap: 10px;
+          }
+
+          .pos-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(2,6,23,.68);
+            display: grid;
+            place-items: center;
+            z-index: 9999;
+            padding: 16px;
+          }
+
+          .pos-modal-card {
+            width: min(520px, 100%);
+            border-radius: 24px;
+            background: #0f172a;
+            border: 1px solid rgba(255,255,255,.10);
+            box-shadow: 0 24px 60px rgba(0,0,0,.28);
+            padding: 16px;
+          }
+
+          .pos-modal-card.wide {
+            width: min(1100px, 100%);
+          }
+
+          .pos-modal-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+          }
+
+          .pos-keypad-screen {
+            height: 56px;
+            border-radius: 16px;
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(255,255,255,.10);
+            display: flex;
+            align-items: center;
+            padding: 0 14px;
+            margin-bottom: 14px;
+            font-size: 18px;
+            font-weight: 800;
+          }
+
+          .pos-keypad-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 12px;
+          }
+
+          .pos-keypad-btn {
+            height: 54px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.08);
+            color: white;
+            font-size: 20px;
+            font-weight: 900;
+            cursor: pointer;
+          }
+
+          .pos-payment-layout {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 16px;
+          }
+
+          .pos-pay-hero {
+            border-radius: 22px;
+            padding: 18px;
+            background: linear-gradient(135deg, rgba(34,211,238,.18), rgba(59,130,246,.18));
+            border: 1px solid rgba(255,255,255,.10);
+          }
+
+          .pos-pay-hero-sub {
+            color: #bfdbfe;
+            font-weight: 800;
+            font-size: 13px;
+          }
+
+          .pos-pay-hero-amount {
+            font-size: 42px;
+            font-weight: 1000;
+            margin-top: 8px;
+          }
+
+          .pos-pay-hero-note {
+            margin-top: 6px;
+            color: #cbd5e1;
+          }
+
+          .pos-section-title {
+            font-weight: 950;
+            margin-bottom: 10px;
+          }
+
+          .pos-pay-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+          }
+
+          .pos-pay-card {
+            padding: 12px;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.06);
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-align: left;
+            cursor: pointer;
+          }
+
+          .pos-pay-card.active {
+            border-color: rgba(34,211,238,.65);
+            box-shadow: 0 0 0 2px rgba(34,211,238,.12) inset;
+          }
+
+          .pos-pay-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            display: grid;
+            place-items: center;
+            font-size: 28px;
+            flex: 0 0 auto;
+          }
+
+          .pos-pay-text {
+            display: grid;
+          }
+
+          .pos-pay-text strong {
+            font-size: 14px;
+          }
+
+          .pos-pay-text span {
+            font-size: 12px;
+            color: #cbd5e1;
+            margin-top: 4px;
+          }
+
+          .pos-inline-grid {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+          }
+
+          .pos-loyalty-box {
+            padding: 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(250,204,21,.22);
+            background: rgba(250,204,21,.08);
+          }
+
+          .pos-loyalty-user {
+            margin-top: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            border-radius: 16px;
+            background: rgba(2,6,23,.35);
+            border: 1px solid rgba(255,255,255,.08);
+          }
+
+          .pos-loyalty-points {
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(250,204,21,.16);
+            color: #fde68a;
+            font-weight: 950;
+          }
+
+          .pos-payment-summary {
+            padding: 16px;
+            border-radius: 22px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.05);
+            align-self: start;
+            display: grid;
+            gap: 12px;
+          }
+
+          
+          /* PREMIUM CHECKOUT FIX - DO NOT REMOVE */
+          .pos-modal-backdrop {
+            position: fixed !important;
+            inset: 0 !important;
+            background:
+              radial-gradient(circle at 20% 20%, rgba(34,211,238,.16), transparent 28%),
+              radial-gradient(circle at 80% 20%, rgba(168,85,247,.16), transparent 28%),
+              rgba(2,6,23,.78) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            z-index: 99999 !important;
+            padding: 18px !important;
+            overflow: hidden !important;
+            backdrop-filter: blur(12px);
+          }
+
+          .pos-modal-card {
+            width: min(540px, calc(100vw - 36px)) !important;
+            max-height: calc(100vh - 36px) !important;
+            overflow: hidden !important;
+            display: grid !important;
+            grid-template-rows: auto 1fr !important;
+            border-radius: 30px !important;
+            background:
+              linear-gradient(135deg, rgba(15,23,42,.98), rgba(2,6,23,.98)) !important;
+            border: 1px solid rgba(255,255,255,.13) !important;
+            box-shadow:
+              0 30px 90px rgba(0,0,0,.50),
+              inset 0 1px 0 rgba(255,255,255,.06) !important;
+          }
+
+          .pos-modal-card.wide {
+            width: min(1380px, calc(100vw - 36px)) !important;
+            max-height: calc(100vh - 36px) !important;
+          }
+
+          .pos-modal-head {
+            min-height: 82px !important;
+            padding: 22px 24px 16px !important;
+            margin-bottom: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            border-bottom: 1px solid rgba(255,255,255,.08) !important;
+            background: rgba(15,23,42,.62) !important;
+          }
+
+          .pos-modal-head h3 {
+            font-size: 22px !important;
+            font-weight: 1000 !important;
+            letter-spacing: -.03em !important;
+          }
+
+          .pos-modal-close {
+            width: 58px !important;
+            height: 58px !important;
+            border-radius: 22px !important;
+            font-size: 24px !important;
+            background: rgba(255,255,255,.08) !important;
+          }
+
+          .pos-modal-body {
+            min-height: 0 !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            padding: 18px 24px 24px !important;
+            scrollbar-width: thin;
+          }
+
+          .pos-modal-body::-webkit-scrollbar,
+          .pos-checkout-left::-webkit-scrollbar {
+            width: 8px;
+          }
+
+          .pos-modal-body::-webkit-scrollbar-thumb,
+          .pos-checkout-left::-webkit-scrollbar-thumb {
+            background: rgba(34,211,238,.40);
+            border-radius: 999px;
+          }
+
+          .pos-payment-layout {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) 390px !important;
+            gap: 18px !important;
+            min-height: 0 !important;
+            align-items: start !important;
+          }
+
+          .pos-payment-layout > div:first-child {
+            min-height: 0 !important;
+            max-height: calc(100vh - 170px) !important;
+            overflow-y: auto !important;
+            padding-right: 8px !important;
+          }
+
+          .pos-payment-summary {
+            position: sticky !important;
+            top: 0 !important;
+            align-self: start !important;
+            border-radius: 26px !important;
+            padding: 22px !important;
+            background:
+              linear-gradient(135deg, rgba(30,41,59,.96), rgba(15,23,42,.96)) !important;
+            border: 1px solid rgba(255,255,255,.14) !important;
+            box-shadow: 0 18px 50px rgba(0,0,0,.22) !important;
+          }
+
+          .pos-pay-hero {
+            min-height: 154px !important;
+            display: grid !important;
+            align-content: center !important;
+            border-radius: 26px !important;
+            background:
+              radial-gradient(circle at top left, rgba(34,211,238,.26), transparent 40%),
+              linear-gradient(135deg, rgba(8,145,178,.45), rgba(37,99,235,.32)) !important;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.08) !important;
+          }
+
+          .pos-pay-hero-amount {
+            font-size: 56px !important;
+            line-height: 1 !important;
+            letter-spacing: -.05em !important;
+          }
+
+          .pos-pay-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 14px !important;
+          }
+
+          .pos-pay-card {
+            min-height: 96px !important;
+            border-radius: 22px !important;
+            padding: 16px !important;
+            background: rgba(255,255,255,.075) !important;
+            border: 1px solid rgba(255,255,255,.10) !important;
+          }
+
+          .pos-pay-card.active {
+            background:
+              linear-gradient(135deg, rgba(34,211,238,.12), rgba(37,99,235,.08)) !important;
+            border-color: rgba(34,211,238,.70) !important;
+            box-shadow:
+              0 0 0 2px rgba(34,211,238,.10) inset,
+              0 18px 40px rgba(34,211,238,.10) !important;
+          }
+
+          .pos-pay-icon {
+            width: 62px !important;
+            height: 62px !important;
+            border-radius: 20px !important;
+            font-size: 32px !important;
+            box-shadow: 0 12px 28px rgba(0,0,0,.20) !important;
+          }
+
+          .pos-pay-text strong {
+            font-size: 17px !important;
+            font-weight: 950 !important;
+          }
+
+          .pos-pay-text span {
+            font-size: 13px !important;
+            font-weight: 700 !important;
+          }
+
+          .pos-summary-stack {
+            gap: 12px !important;
+          }
+
+          .pos-payment-summary .pos-primary-btn {
+            height: 58px !important;
+            border-radius: 22px !important;
+            font-size: 17px !important;
+            margin-top: 8px !important;
+            background: linear-gradient(135deg,#06b6d4,#2563eb) !important;
+            box-shadow: 0 18px 40px rgba(37,99,235,.24) !important;
+          }
+
+          .pos-payment-summary .pos-soft-btn {
+            height: 58px !important;
+            border-radius: 22px !important;
+            font-size: 17px !important;
+            background: rgba(255,255,255,.09) !important;
+          }
+
+          .pos-payment-summary .pos-unpaid-btn {
+            height: 58px !important;
+            border-radius: 22px !important;
+            font-size: 17px !important;
+            margin-top: 8px !important;
+            background: linear-gradient(135deg,rgba(250,204,21,.24),rgba(249,115,22,.20)) !important;
+            border: 1px solid rgba(250,204,21,.38) !important;
+            color: #fde68a !important;
+          }
+
+          @media (max-width: 1050px) {
+            .pos-payment-layout {
+              grid-template-columns: 1fr !important;
+            }
+
+            .pos-payment-layout > div:first-child {
+              max-height: none !important;
+              overflow: visible !important;
+              padding-right: 0 !important;
+            }
+
+            .pos-payment-summary {
+              position: relative !important;
+            }
+
+            .pos-pay-grid {
+              grid-template-columns: 1fr !important;
+            }
+          }
+
+          @media (max-width: 1280px) {
+            .pro-pos-layout {
+              grid-template-columns: 260px 1fr;
+            }
+
+            .pos-cart {
+              grid-column: 1 / -1;
+            }
+          }
+
+          @media (max-width: 900px) {
+            .pro-pos-layout {
+              grid-template-columns: 1fr;
+            }
+
+            .pos-form-grid,
+            .pos-payment-layout,
+            .pos-pay-grid,
+            .pos-inline-grid,
+            .pos-pay-actions,
+            .pos-search-row {
+              grid-template-columns: 1fr;
+            }
+          }
+        `}
+      </style>
+
+      <div className="pro-pos-layout">
+        <aside className="pro-panel pos-left">
+          <button className="pos-back-btn" onClick={onBack}>
+            ← Back
+          </button>
+
+          <div className="pos-title-card">
+            <p className="pos-small-muted" style={{ margin: "0 0 8px" }}>
+              {settings.restaurantName || "Restaurant POS"}
+            </p>
+            <h2 className="pos-mode-title">{screenTitle}</h2>
+            <p className="pos-small-muted" style={{ margin: "8px 0 0" }}>
+              Professional point of sale mode
+            </p>
+          </div>
+
+          <div className="pos-chip-wrap">
+            <div className="pos-chip">🛒 {cart.length} Items</div>
+            <div className="pos-chip">🔍 {visibleItems.length} Visible</div>
+            <div className="pos-chip">📦 {menuItems.length} Menu Items</div>
+          </div>
+
+          {driveThruTicket ? (
+            <div className="pos-title-card">
+              <div style={{ fontWeight: 950 }}>🚗 {driveThruTicket.tokenNo}</div>
+              <div className="pos-small-muted" style={{ marginTop: 8 }}>
+                {driveThruTicket.vehicleNo || "No vehicle no"} · {driveThruTicket.vehicleColor || "No color"} · {driveThruTicket.vehicleType || "Vehicle"}
+              </div>
+            </div>
+          ) : null}
+
+          <label className="pos-field">
+            <span className="pos-label">Phone Number</span>
+            <button className="pos-soft-btn" onClick={() => setPhoneModal(true)}>
+              {phone || "Add Phone Number"}
+            </button>
+          </label>
+
+          <label className="pos-field">
+            <span className="pos-label">Customer Information</span>
+            <button className="pos-soft-btn" onClick={() => setCustomerModal(true)}>
+              {customer.firstName ? `${customer.firstName} ${customer.lastName}`.trim() : "Add Customer"}
+            </button>
+          </label>
+
+          {loyaltyCustomer ? (
+            <div className="pos-title-card">
+              <div style={{ fontWeight: 950 }}>🎁 Loyalty Customer</div>
+              <div className="pos-small-muted" style={{ marginTop: 8 }}>
+                {loyaltyCustomer.name} · {loyaltyCustomer.loyaltyPoints || 0} points
+              </div>
+            </div>
+          ) : null}
+
+          {orderMode === "dine_in" ? (
+            <StaffSelect
+              label="Serving Waiter"
+              value={selectedWaiterId}
+              onChange={setSelectedWaiterId}
+              options={staffData.waiters}
+              placeholder="Select waiter"
+            />
+          ) : null}
+
+          {orderMode === "delivery" ? (
+            <StaffSelect
+              label="Delivery Rider"
+              value={selectedRiderId}
+              onChange={setSelectedRiderId}
+              options={staffData.riders}
+              placeholder="Select rider"
+            />
+          ) : null}
+
+          <StaffSelect
+            label="Cashier"
+            value={selectedCashierId}
+            onChange={setSelectedCashierId}
+            options={staffData.cashiers}
+            placeholder="Select cashier"
+          />
+
+          <div className="pos-title-card">
+            <div style={{ fontWeight: 950 }}>📊 Tax & Charges</div>
+            <div className="pos-small-muted" style={{ marginTop: 8 }}>
+              {settings.taxName || "GST"} {settings.taxPercent || 0}% · {settings.serviceChargeName || "Service"} {settings.serviceChargePercent || 0}%
+            </div>
+          </div>
+        </aside>
+
+        <section className="pro-panel pos-menu-zone">
+          <div className="pos-menu-head">
+            <div className="pos-brand-row">
+              <div className="pos-brand-badge">{settings.brandTitle || settings.restaurantName || "NexaPOS"}</div>
+              <div className="pos-small-muted">{screenTitle}</div>
+            </div>
+
+            <div className="pos-search-row">
+              <input
+                className="pos-input"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search menu items..."
+              />
+              <button className="pos-soft-btn" onClick={loadMenu}>Refresh Menu</button>
+              <button className="pos-soft-btn" onClick={loadSettings}>Refresh Settings</button>
+            </div>
+          </div>
+
+          <div className="pos-category-row">
+            {categories.map((category) => (
+              <button
+                key={category.id}
+                className={`pos-cat-btn ${activeCategoryId === category.id ? "active" : ""}`}
+                onClick={() => setActiveCategoryId(category.id)}
+              >
+                {category.name}
+              </button>
+            ))}
+          </div>
+
+          <div className="pos-menu-scroll">
+            <div style={{ marginBottom: 14 }}>
+              <h2 style={{ margin: 0, fontSize: 28, fontWeight: 1000 }}>
+                {activeCategory?.name || "Menu"}
+              </h2>
+              <div className="pos-small-muted" style={{ marginTop: 6 }}>
+                Professional item cards with built-in images
+              </div>
+            </div>
+
+            {visibleItems.length === 0 ? (
+              <div className="pos-empty-cart">
+                <div>
+                  <div style={{ fontSize: 56 }}>🍽️</div>
+                  <h3>No items found</h3>
+                  <p>Try another category or search keyword.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="pos-products-grid">
+                {visibleItems.map((item) => (
+                  <div className="pos-product-card" key={item.id}>
+                    <div
+                      className="pos-product-image"
+                      style={{ backgroundImage: `url(${item.image})` }}
+                    >
+                      <div className="pos-product-emoji">{item.emoji || categoryEmoji(item.category)}</div>
+                      <div className="pos-product-price">{money(settings, item.price)}</div>
+                      <button className="pos-product-add" onClick={() => addToCart(item)}>
+                        +
+                      </button>
+                    </div>
+
+                    <div className="pos-product-body">
+                      <h3 className="pos-product-name">{item.name}</h3>
+                      <p className="pos-product-sub">
+                        {item.subtitle || item.category || "Fresh kitchen item"}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <aside className="pro-panel pos-cart">
+          <div className="pos-cart-head">
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+              <div>
+                <h3 style={{ margin: 0 }}>Current Order</h3>
+                <div className="pos-small-muted">
+                  {cart.length} items in cart
+                </div>
+              </div>
+
+              <button className="pos-ghost-btn" onClick={() => setLastReceiptOrder(lastReceiptOrder)}>
+                🧾
+              </button>
+            </div>
+          </div>
+
+          <div className="pos-cart-scroll">
+            {cart.length === 0 ? (
+              <div className="pos-empty-cart">
+                <div>
+                  <div style={{ fontSize: 52 }}>🛒</div>
+                  <h3>Cart is empty</h3>
+                  <p>Select menu items to start order.</p>
+                </div>
+              </div>
+            ) : (
+              cart.map((item) => (
+                <div className="pos-cart-item" key={item.id}>
+                  <div className="pos-cart-item-top">
+                    <div
+                      className="pos-cart-thumb"
+                      style={{ backgroundImage: `url(${item.image})` }}
+                    />
+                    <div>
+                      <div className="pos-cart-item-name">{item.name}</div>
+                      <div className="pos-cart-item-sub">{money(settings, item.price)}</div>
+                    </div>
+                    <button className="pos-remove-btn" onClick={() => removeItem(item.id)}>
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="pos-qty-row">
+                    <div className="pos-qty-box">
+                      <button className="pos-qty-btn" onClick={() => changeQty(item.id, -1)}>-</button>
+                      <strong>{item.qty}</strong>
+                      <button className="pos-qty-btn" onClick={() => changeQty(item.id, 1)}>+</button>
+                    </div>
+                    <strong>{money(settings, item.price * item.qty)}</strong>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="pos-cart-foot">
+            <div className="pos-summary-stack">
+              <SummaryRow label="Subtotal" value={money(settings, subtotal)} />
+              <SummaryRow label="Discount" value={`- ${money(settings, totalDiscount)}`} success={totalDiscount > 0} />
+              <SummaryRow label="Loyalty" value={`- ${money(settings, loyaltyRedeemAmount)}`} success={loyaltyRedeemAmount > 0} />
+              <SummaryRow label={`${settings.taxName || "GST"} (${settings.taxPercent || 0}%)`} value={money(settings, taxAmount)} />
+              <SummaryRow label={`${settings.serviceChargeName || "Service"} (${settings.serviceChargePercent || 0}%)`} value={money(settings, serviceChargeAmount)} />
+              <SummaryRow label="Grand Total" value={money(settings, finalTotal)} strong />
+            </div>
+
+            <div className="pos-pay-actions">
+              <button
+                className="pos-soft-btn"
+                disabled={saving}
+                onClick={() =>
+                  saveOrder({
+                    paymentStatus: "unpaid",
+                    paymentMethod: "",
+                    orderStatus: "held",
+                    kitchenStatus: "unconfirmed",
+                    payableTotal: finalTotalBeforeLoyalty,
+                    discountAmount: totalDiscount,
+                    discounts: discountResult
+                  })
+                }
+              >
+                {saving ? "Saving..." : "Hold Order"}
+              </button>
+
+              <button className="pos-primary-btn" disabled={saving} onClick={openPayment}>
+                Checkout {money(settings, finalTotal)}
+              </button>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      {phoneModal ? (
+        <PhoneModal
+          phone={phone}
+          setPhone={setPhone}
+          onClose={() => setPhoneModal(false)}
+          onDone={async () => {
+            setPhoneModal(false);
+            if (phone) {
+              await lookupCustomerByPhone(phone);
+            }
+          }}
+        />
+      ) : null}
+
+      {customerModal ? (
+        <CustomerModal
+          customer={customer}
+          setCustomer={setCustomer}
+          onClose={() => setCustomerModal(false)}
+        />
+      ) : null}
+
+      {paymentModal ? (
+        <PaymentModal
+          settings={settings}
+          subtotal={subtotal}
+          taxAmount={taxAmount}
+          serviceChargeAmount={serviceChargeAmount}
+          grandTotal={finalTotalBeforeLoyalty}
+          discountResult={discountResult}
+          couponCode={couponCode}
+          setCouponCode={setCouponCode}
+          selectedPaymentMethod={selectedPaymentMethod}
+          setSelectedPaymentMethod={setSelectedPaymentMethod}
+          saving={saving}
+          calculatingDiscount={calculatingDiscount}
+          loyaltyCustomer={loyaltyCustomer}
+          loyaltyLookupLoading={loyaltyLookupLoading}
+          loyaltyRedeemPoints={loyaltyRedeemPoints}
+          setLoyaltyRedeemPoints={setLoyaltyRedeemPoints}
+          loyaltyRedeemAmount={loyaltyRedeemAmount}
+          finalPayableAfterLoyalty={finalTotal}
+          phone={phone}
+          onLookupCustomer={lookupCustomerByPhone}
+          onClose={() => setPaymentModal(false)}
+          onRecalculate={calculateDiscounts}
+          onComplete={(method, grandTotal, discountAmount, discounts) =>
+            saveOrder({
+              paymentStatus: method === "Complimentary" ? "complimentary" : "paid",
+              paymentMethod: method,
+              orderStatus: "placed",
+              kitchenStatus: "placed",
+              payableTotal: grandTotal,
+              discountAmount,
+              discounts
+            })
+          }
+        />
+      ) : null}
+
+      {lastReceiptOrder ? (
+        <ThermalReceipt
+          order={lastReceiptOrder}
+          settings={settings}
+          onClose={() => setLastReceiptOrder(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+
+
+
+
+
+

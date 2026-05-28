@@ -43,6 +43,7 @@ const supplierPurchaseRoutes = require("./routes/supplierPurchaseRoutes");
 const expenseRoutes = require("./routes/expenseRoutes");
 const customerRoutes = require("./routes/customerRoutes");
 const loyaltyRoutes = require("./routes/loyaltyRoutes");
+const roleAccessRoutes = require("./routes/roleAccessRoutes");
 
 const app = express();
 
@@ -63,6 +64,7 @@ app.use("/api/supplier-purchases", requireAuth, supplierPurchaseRoutes({ readDb,
 app.use("/api/expenses", requireAuth, expenseRoutes({ readDb, writeDb }));
 app.use("/api/customers", requireAuth, customerRoutes({ readDb, writeDb }));
 app.use("/api/loyalty", requireAuth, loyaltyRoutes({ readDb, writeDb }));
+app.use("/api/role-access", requireAuth, roleAccessRoutes({ readDb, writeDb, hashPassword }));
 
 const PORT = process.env.PORT || 5000;
 
@@ -696,7 +698,8 @@ app.post("/api/menu/categories", requireAuth, tenantOnly, (req, res) => {
   const category = {
     id: uuid(),
     tenantId: req.user.tenantId,
-    branchId: req.user.branchId || null,
+    branchId: req.body.branchId || req.user.branchId || null,
+      branchName: req.body.branchName || "",
     name,
     sortOrder: db.menuCategories.filter((item) => item.tenantId === req.user.tenantId).length + 1,
     isActive: true,
@@ -782,7 +785,8 @@ app.post("/api/menu/items", requireAuth, tenantOnly, (req, res) => {
   const item = {
     id: uuid(),
     tenantId: req.user.tenantId,
-    branchId: req.user.branchId || null,
+    branchId: req.body.branchId || req.user.branchId || null,
+      branchName: req.body.branchName || "",
     categoryId,
     category: category.name,
     name,
@@ -804,7 +808,8 @@ app.post("/api/menu/items", requireAuth, tenantOnly, (req, res) => {
   db.inventoryItems.push({
     id: uuid(),
     tenantId: req.user.tenantId,
-    branchId: req.user.branchId || null,
+    branchId: req.body.branchId || req.user.branchId || null,
+      branchName: req.body.branchName || "",
     menuItemId: item.id,
     name: item.name,
     sku: item.sku,
@@ -950,7 +955,8 @@ app.post("/api/inventory", requireAuth, tenantOnly, (req, res) => {
   const item = {
     id: uuid(),
     tenantId: req.user.tenantId,
-    branchId: req.user.branchId || null,
+    branchId: req.body.branchId || req.user.branchId || null,
+      branchName: req.body.branchName || "",
     menuItemId: null,
     name,
     sku: sku || `INV-${Date.now()}`,
@@ -971,7 +977,8 @@ app.post("/api/inventory", requireAuth, tenantOnly, (req, res) => {
   db.stockMovements.push({
     id: uuid(),
     tenantId: req.user.tenantId,
-    branchId: req.user.branchId || null,
+    branchId: req.body.branchId || req.user.branchId || null,
+      branchName: req.body.branchName || "",
     inventoryItemId: item.id,
     menuItemId: null,
     type: "IN",
@@ -1044,7 +1051,8 @@ app.patch("/api/inventory/:itemId/adjust", requireAuth, tenantOnly, (req, res) =
   const movement = {
     id: uuid(),
     tenantId: req.user.tenantId,
-    branchId: req.user.branchId || null,
+    branchId: req.body.branchId || req.user.branchId || null,
+      branchName: req.body.branchName || "",
     inventoryItemId: item.id,
     menuItemId: item.menuItemId || null,
     type,
@@ -1149,7 +1157,8 @@ app.patch("/api/tables/:tableId/settle", requireAuth, tenantOnly, (req, res) => 
     id: uuid(),
     type: "table_settlement",
     tenantId: req.user.tenantId,
-    branchId: req.user.branchId || null,
+    branchId: req.body.branchId || req.user.branchId || null,
+      branchName: req.body.branchName || "",
     tableId: table.id,
     tableName: table.name,
     orderNo: table.orderNo,
@@ -1233,7 +1242,8 @@ app.post("/api/orders", requireAuth, tenantOnly, async (req, res) => {
       id: uuid(),
       orderNo,
       tenantId: req.user.tenantId,
-      branchId: req.user.branchId || null,
+      branchId: req.body.branchId || req.user.branchId || null,
+      branchName: req.body.branchName || "",
       createdBy: req.user.id,
       mode,
       table: table || null,
@@ -1561,6 +1571,9 @@ app.listen(PORT, () => {
     console.error("Failed to initialize database:", error);
     process.exit(1);
   });
+
+
+
 
 
 

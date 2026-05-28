@@ -231,7 +231,7 @@ function EditOrderModal({ token, order, menuItems, onClose, onSaved }) {
                     <div>
                       <strong>{item.name}</strong>
                       <p>{item.category || item.subtitle || "Menu Item"}</p>
-                      <span>{money(order, item.price)} x {item.qty}</span>
+                      <span>{money(order, item.price)} • {item.qty}</span>
                     </div>
 
                     <div className="orders-edit-actions">
@@ -393,7 +393,7 @@ function PayOrderModal({ order, onClose, onPaid, paying }) {
   );
 }
 
-function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel, onPay }) {
+function OrderDetailsModal({ order, canEditOrders, canCancelOrders, getOrderBranchName, onClose, onPrint, onEdit, onCancel, onPay }) {
   const items = safeItems(order.items);
   const customerName = `${order?.customer?.firstName || ""} ${order?.customer?.lastName || ""}`.trim();
 
@@ -403,7 +403,7 @@ function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel, onPay })
         <div className="orders-modal-head">
           <div>
             <h2>{order.orderNo || "Order Details"}</h2>
-            <p>{normalizeMode(order.mode)} x {formatDate(order.createdAt || order.date)}</p>
+            <p>{normalizeMode(order.mode)} • {formatDate(order.createdAt || order.date)}</p>
             <span className={`orders-payment-badge ${paymentBadge(order).cls}`}>
               {paymentBadge(order).label}
             </span>
@@ -415,7 +415,7 @@ function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel, onPay })
         <div className="orders-details-grid">
           <main className="orders-details-main">
             <div className="orders-info-grid">
-              <div><span>Payment</span><strong>{paymentBadge(order).label} x {paymentBadge(order).sub}</strong></div>
+              <div><span>Payment</span><strong>{paymentBadge(order).label} • {paymentBadge(order).sub}</strong></div>
               <div><span>Customer</span><strong>{customerName || "Walk-in"}</strong></div>
               <div><span>Phone</span><strong>{order.phone || "N/A"}</strong></div>
               <div><span>Waiter</span><strong>{order.waiterName || "N/A"}</strong></div>
@@ -436,7 +436,7 @@ function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel, onPay })
                       <strong>{item.name}</strong>
                       <p>{item.category || item.subtitle || "Menu Item"}</p>
                     </div>
-                    <span>{qty} x {money(order, price)}</span>
+                    <span>{qty} • {money(order, price)}</span>
                     <strong>{money(order, qty * price)}</strong>
                   </div>
                 );
@@ -495,7 +495,7 @@ function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel, onPay })
   );
 }
 
-function OrderCard({ order, onView, onPrint, onEdit, onCancel, onPay }) {
+function OrderCard({ order, canEditOrders, canCancelOrders, onView, onPrint, onEdit, onCancel, onPay }) {
   const customerName = `${order?.customer?.firstName || ""} ${order?.customer?.lastName || ""}`.trim();
 
   return (
@@ -518,6 +518,7 @@ function OrderCard({ order, onView, onPrint, onEdit, onCancel, onPay }) {
         <span>{normalizeMode(order.mode)}</span>
         <span>{order.items?.length || 0} items</span>
         <span>{customerName || order.phone || "Walk-in"}</span>
+        <span>{order.branchName || order.branch?.name || "Branch"}</span>
       </div>
 
       <div className="orders-card-total">{money(order, order.total)}</div>
@@ -535,7 +536,7 @@ function OrderCard({ order, onView, onPrint, onEdit, onCancel, onPay }) {
   );
 }
 
-export default function OrdersPanel({ token, onBack }) {
+export default function OrdersPanel({ token, session, roleContext, activeModuleBranchId, activeModuleBranchName, activeModuleBranchMode, onBack }) {
   const [orders, setOrders] = useState([]);
   const [settings, setSettings] = useState(defaultSettings);
   const [menuItems, setMenuItems] = useState([]);
@@ -548,14 +549,79 @@ export default function OrdersPanel({ token, onBack }) {
   const [payOrder, setPayOrder] = useState(null);
   const [payingOrder, setPayingOrder] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [selectedBranchId, setSelectedBranchId] = useState(() => {
+    const saved = localStorage.getItem("nexapos_selected_branch_id");
+    if (saved) return saved;
 
-  async function loadOrders() {
+    return activeModuleBranchMode === "all"
+      ? "all"
+      : activeModuleBranchId || roleContext?.activeBranch?.id || session?.roleContext?.activeBranch?.id || "all";
+  });
+
+  const permissions = roleContext?.permissions || session?.roleContext?.permissions || {};
+  const canEditOrders = permissions.canEditOrders !== false;
+  const canCancelOrders = permissions.canRefundOrders === true || permissions.canEditOrders === true;
+  const canViewAllBranches = permissions.canViewAllBranches === true;
+  const activeBranchId =
+    roleContext?.activeBranch?.id ||
+    session?.roleContext?.activeBranch?.id ||
+    session?.user?.branchId ||
+    "";
+  const branchMode = canViewAllBranches && !activeBranchId ? "all" : "single";
+
+
+  const branches = roleContext?.branches || session?.roleContext?.branches || [];
+  const selectedBranch =
+    selectedBranchId === "all"
+      ? null
+      : branches.find((branch) => branch.id === selectedBranchId) || roleContext?.activeBranch || session?.roleContext?.activeBranch || null;
+
+  function readOrderBranchName(order) {
+    if (order.branchName) return order.branchName;
+    if (order.branch?.name) return order.branch.name;
+
+    const found = branches.find((branch) => branch.id === order.branchId);
+    return found?.name || order.branchId || "Main Branch";
+  }
+  function readOrderBranchId(order) {
+    return (
+      order?.branchId ||
+      order?.branch_id ||
+      order?.raw?.branchId ||
+      order?.raw?.branch_id ||
+      order?.metadata?.branchId ||
+      ""
+    );
+  }
+
+  function readOrderBranchName(order) {
+    if (order?.branchName) return order.branchName;
+    if (order?.branch?.name) return order.branch.name;
+    if (order?.raw?.branchName) return order.raw.branchName;
+
+    const id = readOrderBranchId(order);
+    const found = branches.find((branch) => String(branch.id) === String(id));
+
+    return found?.name || activeModuleBranchName || id || "No Branch / Old Order";
+  }
+
+  async function loadOrders(branchOverride = selectedBranchId) {
     setLoading(true);
 
     try {
-      const res = await api(token).get("/api/orders");
+      const targetBranchId = branchOverride || "all";
+
+      // Load broad list, then enforce branch separation in frontend.
+      // This guarantees owner branch dropdown works even before backend filtering is perfect.
+      const res = await api(token).get("/api/orders?limit=500");
       const list = Array.isArray(res.data) ? res.data : res.data.orders || [];
-      setOrders(list);
+
+      const finalList =
+        targetBranchId && targetBranchId !== "all"
+          ? list.filter((order) => String(readOrderBranchId(order)) === String(targetBranchId))
+          : list;
+
+      setOrders(finalList);
     } catch (error) {
       alert(error.response?.data?.message || "Failed to load orders.");
       setOrders([]);
@@ -1273,6 +1339,37 @@ export default function OrdersPanel({ token, onBack }) {
             gap: 10px;
           }
 
+          
+          /* ORDERS BRANCH SELECT FINAL FIX */
+          select.orders-branch-select,
+          .orders-branch-select {
+            appearance: auto !important;
+            -webkit-appearance: menulist !important;
+            height: 48px !important;
+            min-width: 240px !important;
+            border-radius: 16px !important;
+            border: 1px solid rgba(34,211,238,.45) !important;
+            background-color: #020617 !important;
+            background: #020617 !important;
+            color: #ffffff !important;
+            font-weight: 1000 !important;
+            padding: 0 14px !important;
+            outline: none !important;
+            box-shadow: 0 0 0 1px rgba(34,211,238,.14), 0 12px 28px rgba(0,0,0,.22) !important;
+          }
+
+          select.orders-branch-select option,
+          .orders-branch-select option {
+            background-color: #020617 !important;
+            color: #ffffff !important;
+            font-weight: 900 !important;
+          }
+
+          select.orders-branch-select:focus {
+            border-color: rgba(34,211,238,.85) !important;
+            box-shadow: 0 0 0 3px rgba(34,211,238,.16) !important;
+          }
+
           @media (max-width: 1050px) {
             .orders-toolbar,
             .orders-details-grid,
@@ -1300,13 +1397,36 @@ export default function OrdersPanel({ token, onBack }) {
         <div>
           <button className="orders-back" onClick={onBack}>← Back</button>
           <h1 className="orders-title">Orders Management</h1>
-          <p className="orders-sub">Edit orders, add/delete items, cancel orders and reprint receipts.</p>
+          <p className="orders-sub">Branch-aware orders, unpaid payments, edit permissions, cancellations and receipts.</p>
         </div>
 
         <button className="orders-primary-btn" onClick={loadOrders}>Refresh Orders</button>
       </div>
 
       <div className="orders-toolbar">
+        {canViewAllBranches ? (
+          <select
+            className="orders-search orders-branch-select"
+            value={selectedBranchId}
+            onChange={(e) => {
+              const nextBranchId = e.target.value;
+              setSelectedBranchId(nextBranchId);
+              localStorage.setItem("nexapos_selected_branch_id", nextBranchId);
+              loadOrders(nextBranchId);
+            }}
+          >
+            <option value="all">All Branches</option>
+            {branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="orders-search" style={{ display: "grid", alignItems: "center" }}>
+            Branch: {selectedBranch?.name || roleContext?.activeBranch?.name || "Assigned Branch"}
+          </div>
+        )}
         <input
           className="orders-search"
           value={search}
@@ -1397,6 +1517,19 @@ export default function OrdersPanel({ token, onBack }) {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

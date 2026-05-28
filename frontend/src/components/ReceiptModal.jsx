@@ -221,3 +221,4 @@ export default function ReceiptModal({ table, mode = "settle", onClose, onPaid }
 
 
 
+

@@ -1,0 +1,644 @@
+﻿import React, { useEffect, useMemo, useState } from "react";
+import {
+  BadgePercent,
+  BarChart3,
+  Bike,
+  Boxes,
+  ChefHat,
+  ChevronLeft,
+  CircleDollarSign,
+  CreditCard,
+  LineChart,
+  PackageCheck,
+  ReceiptText,
+  RefreshCw,
+  ShoppingBag,
+  TrendingDown,
+  TrendingUp,
+  Trophy,
+  UserCheck,
+  Wallet,
+  WalletCards
+} from "lucide-react";
+import { api } from "../lib/api";
+
+function money(value) {
+  return `Rs ${Math.round(Number(value || 0)).toLocaleString()}`;
+}
+
+function safeNumber(value) {
+  return Number(value || 0);
+}
+
+function StatCard({ label, value, icon: Icon, tone, helper }) {
+  const color =
+    tone === "green"
+      ? "#86efac"
+      : tone === "red"
+        ? "#fca5a5"
+        : tone === "yellow"
+          ? "#fde68a"
+          : tone === "cyan"
+            ? "#a5f3fc"
+            : "#d8b4fe";
+
+  return (
+    <div className="nexa-stat-card">
+      <Icon color={color} size={30} />
+      <p className="nexa-stat-label">{label}</p>
+      <p className="nexa-stat-value" style={{ color }}>{value}</p>
+      {helper ? <p className="nexa-small">{helper}</p> : null}
+    </div>
+  );
+}
+
+function ProgressRow({ label, value, max, rightText, tone = "cyan" }) {
+  const percent = max > 0 ? Math.min(100, Math.round((safeNumber(value) / max) * 100)) : 0;
+
+  const gradient =
+    tone === "red"
+      ? "linear-gradient(90deg,#ef4444,#f97316)"
+      : tone === "green"
+        ? "linear-gradient(90deg,#22c55e,#14b8a6)"
+        : tone === "yellow"
+          ? "linear-gradient(90deg,#facc15,#f97316)"
+          : "linear-gradient(90deg,#22d3ee,#a855f7)";
+
+  return (
+    <div
+      style={{
+        borderRadius: 17,
+        padding: 12,
+        border: "1px solid rgba(255,255,255,.10)",
+        background: "rgba(255,255,255,.055)"
+      }}
+    >
+      <div className="nexa-row-between">
+        <strong>{label}</strong>
+        <span style={{ color: "#a5f3fc", fontWeight: 900 }}>{rightText || money(value)}</span>
+      </div>
+
+      <div
+        style={{
+          height: 8,
+          borderRadius: 999,
+          background: "rgba(255,255,255,.08)",
+          overflow: "hidden",
+          marginTop: 10
+        }}
+      >
+        <div
+          style={{
+            width: `${percent}%`,
+            height: "100%",
+            borderRadius: 999,
+            background: gradient
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MiniBarChart({ data, labelKey = "name", valueKey = "value", emptyTitle = "No data yet", tone = "cyan" }) {
+  const max = Math.max(...data.map((item) => safeNumber(item[valueKey])), 0);
+
+  if (!data.length) {
+    return (
+      <div style={{ textAlign: "center", color: "#94a3b8", padding: 30 }}>
+        <BarChart3 size={50} />
+        <h3>{emptyTitle}</h3>
+        <p>Create records to see analytics.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      {data.map((item) => (
+        <ProgressRow
+          key={item[labelKey]}
+          label={item[labelKey]}
+          value={item[valueKey]}
+          max={max}
+          rightText={money(item[valueKey])}
+          tone={tone}
+        />
+      ))}
+    </div>
+  );
+}
+
+function TopItemsTable({ items }) {
+  if (!items.length) {
+    return (
+      <div style={{ textAlign: "center", color: "#94a3b8", padding: 24 }}>
+        <ShoppingBag size={48} />
+        <h3>No top items yet</h3>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Qty</th>
+            <th>Sales</th>
+            <th>Cost</th>
+            <th>Profit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.id}>
+              <td>
+                <strong>{item.name}</strong>
+                <p className="nexa-small">{item.category}</p>
+              </td>
+              <td>{item.qty}</td>
+              <td>{money(item.sales)}</td>
+              <td>{money(item.estimatedCost)}</td>
+              <td style={{ color: item.estimatedProfit >= 0 ? "#86efac" : "#fca5a5", fontWeight: 900 }}>
+                {money(item.estimatedProfit)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StaffPerformance({ title, icon: Icon, data }) {
+  return (
+    <section className="nexa-panel">
+      <div className="nexa-row-between" style={{ marginBottom: 12 }}>
+        <div>
+          <h2 style={{ margin: 0 }}>{title}</h2>
+          <p className="nexa-section-sub">Orders and sales performance</p>
+        </div>
+        <Icon color="#a5f3fc" size={28} />
+      </div>
+
+      {data.length === 0 ? (
+        <p className="nexa-section-sub">No performance data yet.</p>
+      ) : (
+        <div style={{ display: "grid", gap: 9 }}>
+          {data.map((person, index) => (
+            <div
+              key={person.name}
+              style={{
+                borderRadius: 17,
+                padding: 12,
+                border: "1px solid rgba(255,255,255,.10)",
+                background: "rgba(255,255,255,.055)",
+                display: "grid",
+                gridTemplateColumns: "42px 1fr auto",
+                gap: 10,
+                alignItems: "center"
+              }}
+            >
+              <div
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 15,
+                  display: "grid",
+                  placeItems: "center",
+                  background: index === 0 ? "rgba(250,204,21,.16)" : "rgba(34,211,238,.12)",
+                  color: index === 0 ? "#fde68a" : "#a5f3fc",
+                  fontWeight: 950
+                }}
+              >
+                {index + 1}
+              </div>
+
+              <div>
+                <strong>{person.name}</strong>
+                <p className="nexa-small">{person.orders} orders</p>
+              </div>
+
+              <strong style={{ color: "#86efac" }}>{money(person.sales)}</strong>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DailyFinanceTable({ rows }) {
+  if (!rows.length) {
+    return (
+      <div style={{ textAlign: "center", color: "#94a3b8", padding: 24 }}>
+        <LineChart size={48} />
+        <h3>No daily records yet</h3>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Sales</th>
+            <th>Expenses</th>
+            <th>Net</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((day) => (
+            <tr key={day.date}>
+              <td><strong>{day.date}</strong></td>
+              <td style={{ color: "#86efac", fontWeight: 900 }}>{money(day.sales)}</td>
+              <td style={{ color: "#fca5a5", fontWeight: 900 }}>{money(day.expenses)}</td>
+              <td style={{ color: safeNumber(day.net) >= 0 ? "#86efac" : "#fca5a5", fontWeight: 950 }}>
+                {money(day.net)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default function AnalyticsPanel({ token, session, onBack }) {
+  const [range, setRange] = useState("today");
+  const [loading, setLoading] = useState(true);
+  const [analytics, setAnalytics] = useState({
+    stats: {
+      totalOrders: 0,
+      paidOrders: 0,
+      unpaidOrders: 0,
+      totalSales: 0,
+      unpaidAmount: 0,
+      totalDiscounts: 0,
+      totalTax: 0,
+      totalServiceCharges: 0,
+      estimatedCost: 0,
+      estimatedGrossProfit: 0,
+      totalExpenses: 0,
+      unpaidExpenses: 0,
+      estimatedNetProfit: 0,
+      profitMargin: 0,
+      netProfitMargin: 0,
+      averageOrderValue: 0
+    },
+    topItems: [],
+    modeBreakdown: [],
+    paymentBreakdown: [],
+    expenseBreakdown: [],
+    waiterPerformance: [],
+    riderPerformance: [],
+    cashierPerformance: [],
+    dailySales: []
+  });
+
+  async function loadAnalytics(selectedRange = range) {
+    setLoading(true);
+
+    try {
+      const res = await api(token).get(`/api/analytics?range=${selectedRange}`);
+      setAnalytics({
+        stats: {
+          totalOrders: 0,
+          paidOrders: 0,
+          unpaidOrders: 0,
+          totalSales: 0,
+          unpaidAmount: 0,
+          totalDiscounts: 0,
+          totalTax: 0,
+          totalServiceCharges: 0,
+          estimatedCost: 0,
+          estimatedGrossProfit: 0,
+          totalExpenses: 0,
+          unpaidExpenses: 0,
+          estimatedNetProfit: 0,
+          profitMargin: 0,
+          netProfitMargin: 0,
+          averageOrderValue: 0,
+          ...(res.data.stats || {})
+        },
+        topItems: res.data.topItems || [],
+        modeBreakdown: res.data.modeBreakdown || [],
+        paymentBreakdown: res.data.paymentBreakdown || [],
+        expenseBreakdown: res.data.expenseBreakdown || [],
+        waiterPerformance: res.data.waiterPerformance || [],
+        riderPerformance: res.data.riderPerformance || [],
+        cashierPerformance: res.data.cashierPerformance || [],
+        dailySales: res.data.dailySales || []
+      });
+    } catch (error) {
+      alert(error.response?.data?.message || "Failed to load analytics.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadAnalytics(range);
+  }, [range]);
+
+  const stats = analytics.stats || {};
+  const isNetProfit = safeNumber(stats.estimatedNetProfit) >= 0;
+  const isGrossProfit = safeNumber(stats.estimatedGrossProfit) >= 0;
+
+  const bestDay = useMemo(() => {
+    const days = analytics.dailySales || [];
+    if (!days.length) return null;
+
+    return [...days].sort((a, b) => safeNumber(b.net) - safeNumber(a.net))[0];
+  }, [analytics.dailySales]);
+
+  const maxDailyValue = Math.max(
+    ...analytics.dailySales.map((day) =>
+      Math.max(safeNumber(day.sales), safeNumber(day.expenses), Math.abs(safeNumber(day.net)))
+    ),
+    0
+  );
+
+  return (
+    <div style={{ minHeight: "100vh", padding: 18 }}>
+      <div className="nexa-row-between">
+        <div>
+          <button className="nexa-logout" onClick={onBack}>
+            <ChevronLeft size={18} /> Back
+          </button>
+          <h1 className="nexa-section-title" style={{ marginTop: 16 }}>
+            Profit / Loss Analytics
+          </h1>
+          <p className="nexa-section-sub">
+            Sales, inventory cost, expenses, gross profit and net profit for {session?.tenant?.restaurantName}.
+          </p>
+        </div>
+
+        <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+          {[
+            ["today", "Today"],
+            ["7d", "7 Days"],
+            ["30d", "30 Days"],
+            ["90d", "90 Days"],
+            ["all", "All Time"]
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              className="nexa-pill"
+              onClick={() => setRange(key)}
+              style={{
+                background: range === key ? "rgba(34,211,238,.20)" : "rgba(255,255,255,.08)"
+              }}
+            >
+              {label}
+            </button>
+          ))}
+
+          <button className="nexa-create-btn" onClick={() => loadAnalytics(range)}>
+            <RefreshCw size={16} /> Refresh
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="nexa-panel" style={{ marginTop: 16, textAlign: "center", padding: 40 }}>
+          <LineChart size={58} color="#a5f3fc" />
+          <h2>Loading analytics...</h2>
+        </div>
+      ) : (
+        <>
+          <div
+            style={{
+              marginTop: 16,
+              display: "grid",
+              gridTemplateColumns: "1.2fr .8fr",
+              gap: 14
+            }}
+          >
+            <section
+              className="nexa-panel"
+              style={{
+                minHeight: 240,
+                background: isNetProfit
+                  ? "radial-gradient(circle at top left, rgba(34,197,94,.16), transparent 36%), rgba(15,23,42,.82)"
+                  : "radial-gradient(circle at top left, rgba(239,68,68,.16), transparent 36%), rgba(15,23,42,.82)"
+              }}
+            >
+              <div className="nexa-row-between">
+                <div>
+                  <div className="nexa-badge">
+                    <WalletCards size={16} /> Real Profit After Expenses
+                  </div>
+                  <h2
+                    style={{
+                      margin: "14px 0 4px",
+                      fontSize: 42,
+                      lineHeight: 1,
+                      letterSpacing: "-0.06em",
+                      color: isNetProfit ? "#86efac" : "#fca5a5"
+                    }}
+                  >
+                    {money(stats.estimatedNetProfit)}
+                  </h2>
+                  <p className="nexa-section-sub">
+                    Net Profit = Gross Profit - Total Expenses
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    width: 92,
+                    height: 92,
+                    borderRadius: 30,
+                    display: "grid",
+                    placeItems: "center",
+                    background: isNetProfit ? "rgba(34,197,94,.14)" : "rgba(239,68,68,.14)",
+                    color: isNetProfit ? "#86efac" : "#fca5a5",
+                    boxShadow: isNetProfit ? "0 0 38px rgba(34,197,94,.16)" : "0 0 38px rgba(239,68,68,.16)"
+                  }}
+                >
+                  {isNetProfit ? <TrendingUp size={46} /> : <TrendingDown size={46} />}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginTop: 22 }}>
+                <div className="nexa-pill">Sales {money(stats.totalSales)}</div>
+                <div className="nexa-pill">Cost {money(stats.estimatedCost)}</div>
+                <div className="nexa-pill">Expenses {money(stats.totalExpenses)}</div>
+                <div className="nexa-pill">Net Margin {stats.netProfitMargin || 0}%</div>
+              </div>
+            </section>
+
+            <section className="nexa-panel">
+              <h2 style={{ marginTop: 0 }}>Finance Formula</h2>
+
+              <div style={{ display: "grid", gap: 10 }}>
+                <ProgressRow
+                  label="Total Sales"
+                  value={stats.totalSales}
+                  max={Math.max(safeNumber(stats.totalSales), 1)}
+                  tone="green"
+                />
+                <ProgressRow
+                  label="Estimated Inventory Cost"
+                  value={stats.estimatedCost}
+                  max={Math.max(safeNumber(stats.totalSales), 1)}
+                  tone="red"
+                />
+                <ProgressRow
+                  label="Total Expenses"
+                  value={stats.totalExpenses}
+                  max={Math.max(safeNumber(stats.totalSales), safeNumber(stats.totalExpenses), 1)}
+                  tone="yellow"
+                />
+              </div>
+            </section>
+          </div>
+
+          <div className="nexa-stats">
+            <StatCard label="Total Sales" value={money(stats.totalSales)} icon={CircleDollarSign} tone="green" />
+            <StatCard label="Gross Profit" value={money(stats.estimatedGrossProfit)} icon={TrendingUp} tone={isGrossProfit ? "green" : "red"} helper={`Gross margin ${stats.profitMargin || 0}%`} />
+            <StatCard label="Total Expenses" value={money(stats.totalExpenses)} icon={Wallet} tone="red" helper={`Unpaid ${money(stats.unpaidExpenses)}`} />
+            <StatCard label="Net Profit" value={money(stats.estimatedNetProfit)} icon={WalletCards} tone={isNetProfit ? "green" : "red"} helper={`Net margin ${stats.netProfitMargin || 0}%`} />
+            <StatCard label="Estimated Cost" value={money(stats.estimatedCost)} icon={TrendingDown} tone="red" />
+            <StatCard label="Orders" value={stats.totalOrders || 0} icon={ReceiptText} />
+            <StatCard label="Average Order" value={money(stats.averageOrderValue)} icon={Wallet} tone="cyan" />
+            <StatCard label="Discounts" value={money(stats.totalDiscounts)} icon={BadgePercent} tone="yellow" />
+            <StatCard label="Tax Collected" value={money(stats.totalTax)} icon={CreditCard} />
+            <StatCard label="Service Charges" value={money(stats.totalServiceCharges)} icon={PackageCheck} />
+            <StatCard label="Unpaid Orders" value={money(stats.unpaidAmount)} icon={TrendingDown} tone="red" />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+            <section className="nexa-panel">
+              <div className="nexa-row-between" style={{ marginBottom: 12 }}>
+                <div>
+                  <h2 style={{ margin: 0 }}>Sales by Mode</h2>
+                  <p className="nexa-section-sub">Dine In, Take Away, Delivery and Drive Thru sales</p>
+                </div>
+                <BarChart3 color="#a5f3fc" size={28} />
+              </div>
+
+              <MiniBarChart data={analytics.modeBreakdown || []} tone="cyan" />
+            </section>
+
+            <section className="nexa-panel">
+              <div className="nexa-row-between" style={{ marginBottom: 12 }}>
+                <div>
+                  <h2 style={{ margin: 0 }}>Payment Breakdown</h2>
+                  <p className="nexa-section-sub">Payment method-wise collection</p>
+                </div>
+                <CreditCard color="#a5f3fc" size={28} />
+              </div>
+
+              <MiniBarChart data={analytics.paymentBreakdown || []} tone="green" />
+            </section>
+
+            <section className="nexa-panel">
+              <div className="nexa-row-between" style={{ marginBottom: 12 }}>
+                <div>
+                  <h2 style={{ margin: 0 }}>Expense Breakdown</h2>
+                  <p className="nexa-section-sub">Category-wise business expenses</p>
+                </div>
+                <Wallet color="#fca5a5" size={28} />
+              </div>
+
+              <MiniBarChart
+                data={analytics.expenseBreakdown || []}
+                emptyTitle="No expenses yet"
+                tone="red"
+              />
+            </section>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: ".9fr 1.1fr", gap: 14, marginTop: 14 }}>
+            <section className="nexa-panel">
+              <div className="nexa-row-between" style={{ marginBottom: 12 }}>
+                <div>
+                  <h2 style={{ margin: 0 }}>Daily Sales / Expenses / Net</h2>
+                  <p className="nexa-section-sub">
+                    {bestDay ? `Best net day: ${bestDay.date} Â· ${money(bestDay.net)}` : "No daily finance yet"}
+                  </p>
+                </div>
+                <LineChart color="#a5f3fc" size={28} />
+              </div>
+
+              <div style={{ display: "grid", gap: 10 }}>
+                {(analytics.dailySales || []).slice(-10).map((day) => (
+                  <div
+                    key={day.date}
+                    style={{
+                      borderRadius: 17,
+                      padding: 12,
+                      border: "1px solid rgba(255,255,255,.10)",
+                      background: "rgba(255,255,255,.055)"
+                    }}
+                  >
+                    <div className="nexa-row-between">
+                      <strong>{day.date}</strong>
+                      <strong style={{ color: safeNumber(day.net) >= 0 ? "#86efac" : "#fca5a5" }}>
+                        Net {money(day.net)}
+                      </strong>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+                      <ProgressRow label="Sales" value={day.sales} max={maxDailyValue} tone="green" />
+                      <ProgressRow label="Expenses" value={day.expenses} max={maxDailyValue} tone="red" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="nexa-panel">
+              <div className="nexa-row-between" style={{ marginBottom: 12 }}>
+                <div>
+                  <h2 style={{ margin: 0 }}>Top Selling Items</h2>
+                  <p className="nexa-section-sub">Quantity, sales, estimated cost and profit</p>
+                </div>
+                <Trophy color="#fde68a" size={28} />
+              </div>
+
+              <TopItemsTable items={analytics.topItems || []} />
+            </section>
+          </div>
+
+          <section className="nexa-panel" style={{ marginTop: 14 }}>
+            <div className="nexa-row-between" style={{ marginBottom: 12 }}>
+              <div>
+                <h2 style={{ margin: 0 }}>Daily Finance Table</h2>
+                <p className="nexa-section-sub">Exact daily sales, expenses and net profit values.</p>
+              </div>
+              <LineChart color="#a5f3fc" size={28} />
+            </div>
+
+            <DailyFinanceTable rows={analytics.dailySales || []} />
+          </section>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginTop: 14 }}>
+            <StaffPerformance title="Waiter Performance" icon={UserCheck} data={analytics.waiterPerformance || []} />
+            <StaffPerformance title="Rider Performance" icon={Bike} data={analytics.riderPerformance || []} />
+            <StaffPerformance title="Cashier Performance" icon={ChefHat} data={analytics.cashierPerformance || []} />
+          </div>
+
+          <section className="nexa-panel" style={{ marginTop: 14 }}>
+            <div className="nexa-row-between">
+              <div>
+                <h2 style={{ margin: 0 }}>Profit Note</h2>
+                <p className="nexa-section-sub">
+                  Gross profit uses estimated inventory/menu cost. Net profit subtracts all expenses added in Expenses Management.
+                  For exact profit, keep menu item cost prices and expense records updated.
+                </p>
+              </div>
+              <Boxes color="#a5f3fc" size={28} />
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}

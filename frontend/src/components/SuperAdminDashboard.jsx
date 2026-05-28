@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 
 const moduleLabels = {
@@ -11,10 +11,10 @@ const moduleLabels = {
 };
 
 const moduleIcons = {
-  walk_in: "🚶", take_away: "🛍️", delivery: "🛵", dine_in: "🍽️", drive_thru: "🚗",
-  kiosk: "☝️", orders: "📋", kds: "🖥️", settings: "🍔", restaurant_settings: "⚙️",
-  inventory: "📦", discounts: "🏷️", staff: "👥", customers: "🎁", analytics: "📈",
-  expenses: "💸", supplier_purchases: "🚚", stock_movements: "🔁", menu_inventory_mapping: "🧾"
+  walk_in: "Ÿš¶", take_away: "Ÿ›ï¸", delivery: "Ÿ›µ", dine_in: "Ÿ½ï¸", drive_thru: "Ÿš—",
+  kiosk: "˜ï¸", orders: "Ÿ“‹", kds: "Ÿ–¥ï¸", settings: "Ÿ”", restaurant_settings: "š™ï¸",
+  inventory: "Ÿ“¦", discounts: "Ÿ·ï¸", staff: "Ÿ‘¥", customers: "ŸŽ", analytics: "Ÿ“ˆ",
+  expenses: "Ÿ’¸", supplier_purchases: "Ÿšš", stock_movements: "Ÿ”", menu_inventory_mapping: "Ÿ§¾"
 };
 
 const restaurantModules = [
@@ -49,9 +49,9 @@ function normalizeUser(user) {
 function statusTone(user) {
   const expiry = user.expiryDate;
   const expired = expiry ? new Date(expiry) < new Date() : false;
-  if (!user.isActive) return { label: "Inactive", cls: "inactive", icon: "⛔" };
-  if (expired) return { label: "Expired", cls: "expired", icon: "⏳" };
-  return { label: "Active", cls: "active", icon: "✅" };
+  if (!user.isActive) return { label: "Inactive", cls: "inactive", icon: "›”" };
+  if (expired) return { label: "Expired", cls: "expired", icon: "³" };
+  return { label: "Active", cls: "active", icon: "œ…" };
 }
 
 function initials(name) {
@@ -126,7 +126,7 @@ function ClientModal({ mode, user, packages, allModules, createdLogin, saving, o
             <h2>{editing ? "Edit Client Master Control" : "Create New Client"}</h2>
             <p>{editing ? "Edit login, modules, package, expiry and status." : "Create restaurant account, owner login, package and modules."}</p>
           </div>
-          <button className="sa-icon-btn" onClick={onClose}>×</button>
+          <button className="sa-icon-btn" onClick={onClose}>—</button>
         </div>
 
         <div className="sa-modal-body">
@@ -170,7 +170,7 @@ function ClientModal({ mode, user, packages, allModules, createdLogin, saving, o
           <section className="sa-box full">
             <div className="sa-section-head"><h3>Module Access</h3><div className="sa-mini-actions"><button onClick={() => update("enabledModules", allModules)}>Enable All</button><button onClick={() => update("enabledModules", [])}>Clear</button></div></div>
             <div className="sa-module-grid">
-              {allModules.map((key) => <button key={key} className={`sa-module-chip ${form.enabledModules.includes(key) ? "active" : ""}`} onClick={() => toggleModule(key)}>{moduleIcons[key] || "•"} {moduleLabels[key] || key}</button>)}
+              {allModules.map((key) => <button key={key} className={`sa-module-chip ${form.enabledModules.includes(key) ? "active" : ""}`} onClick={() => toggleModule(key)}>{moduleIcons[key] || "€¢"} {moduleLabels[key] || key}</button>)}
             </div>
           </section>
         </div>
@@ -204,7 +204,7 @@ function ClientCard({ user, onEdit, onToggle, onQuickDays }) {
       </div>
 
       <div className="sa-module-preview">
-        {modules.slice(0, 8).map((key) => <span key={key}>{moduleIcons[key] || "•"} {moduleLabels[key] || key}</span>)}
+        {modules.slice(0, 8).map((key) => <span key={key}>{moduleIcons[key] || "€¢"} {moduleLabels[key] || key}</span>)}
         {modules.length > 8 ? <span>+{modules.length - 8}</span> : null}
       </div>
 
@@ -329,7 +329,7 @@ export default function SuperAdminDashboard({ token, onOpenModule }) {
       `}</style>
 
       <div className="sa-head">
-        <div><div className="sa-kicker">👑 Super Admin Master Control</div><h1 className="sa-title">NexaPOS Command Center</h1><p className="sa-sub">Create clients, control logins, packages, subscription days, module access and status.</p></div>
+        <div><div className="sa-kicker">Ÿ‘‘ Super Admin Master Control</div><h1 className="sa-title">NexaPOS Command Center</h1><p className="sa-sub">Create clients, control logins, packages, subscription days, module access and status.</p></div>
         <div className="sa-head-actions"><button className="sa-primary-btn" onClick={() => { setCreatedLogin(null); setCreatingClient(true); }}>+ Add New Client</button><button className="sa-soft-btn" onClick={loadUsers}>Refresh</button><button className="sa-soft-btn" onClick={() => onOpenModule?.({ key: "super_packages", name: "Packages" })}>Package Builder</button><button className="sa-soft-btn" onClick={() => onOpenModule?.({ key: "super_subscriptions", name: "Subscriptions" })}>Subscriptions</button></div>
       </div>
 
@@ -344,3 +344,4 @@ export default function SuperAdminDashboard({ token, onOpenModule }) {
     </div>
   );
 }
+

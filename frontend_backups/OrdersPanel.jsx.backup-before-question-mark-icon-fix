@@ -1,0 +1,1402 @@
+﻿import React, { useEffect, useMemo, useState } from "react";
+import { api } from "../lib/api";
+import ThermalReceipt from "./ThermalReceipt";
+
+const defaultSettings = {
+  restaurantName: "Nexa Restaurant",
+  receiptTitle: "Nexa Restaurant",
+  receiptSubtitle: "Premium Restaurant POS Receipt",
+  currency: "Rs",
+  taxName: "GST",
+  serviceChargeName: "Service Charges",
+  receiptFooter: "Thank you for your order.",
+  receiptNote: "Powered by NexaPOS Pro"
+};
+
+const payNowMethods = ["Cash", "Card", "Easypaisa", "JazzCash", "Bank Transfer"];
+
+function money(order, value) {
+  return `${order?.currency || order?.restaurantSettings?.currency || "Rs"} ${Math.round(Number(value || 0)).toLocaleString()}`;
+}
+
+function normalizeMode(mode) {
+  const map = {
+    dine_in: "Dine In",
+    take_away: "Take Away",
+    delivery: "Delivery",
+    drive_thru: "Drive Thru",
+    walk_in: "Walk In",
+    kiosk: "Kiosk"
+  };
+
+  return map[mode] || mode || "POS";
+}
+
+function formatDate(value) {
+  if (!value) return "N/A";
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return "N/A";
+  }
+}
+
+function statusColor(status) {
+  if (status === "paid") return "#86efac";
+  if (status === "unpaid") return "#fde68a";
+  if (status === "complimentary") return "#a5f3fc";
+  if (status === "cancelled") return "#fca5a5";
+  return "#cbd5e1";
+}
+
+
+function paymentBadge(order) {
+  const status = String(order?.paymentStatus || "").toLowerCase();
+  const method = String(order?.paymentMethod || "").toLowerCase();
+  const rawMethod = order?.paymentMethod || "";
+
+  if (status === "cancelled") {
+    return { label: "CANCELLED", sub: "Order cancelled", cls: "cancelled" };
+  }
+
+  if (status === "complimentary" || method.includes("complimentary")) {
+    return { label: "COMPLIMENTARY", sub: "VIP / free order", cls: "comp" };
+  }
+
+  if (status === "unpaid" || method.includes("unpaid") || method.includes("pay later")) {
+    return { label: "UNPAID", sub: rawMethod || "Pay later", cls: "unpaid" };
+  }
+
+  if (method.includes("cash on delivery") || method === "cod") {
+    return { label: "COD / UNPAID", sub: "Cash on delivery", cls: "unpaid" };
+  }
+
+  if (status === "paid") {
+    if (method.includes("card")) return { label: "PAID / CARD", sub: rawMethod || "Card", cls: "paid" };
+    if (method.includes("cash")) return { label: "PAID / CASH", sub: rawMethod || "Cash", cls: "paid" };
+    if (method.includes("easy")) return { label: "PAID / EASYPAISA", sub: rawMethod, cls: "paid" };
+    if (method.includes("jazz")) return { label: "PAID / JAZZCASH", sub: rawMethod, cls: "paid" };
+    if (method.includes("bank")) return { label: "PAID / BANK", sub: rawMethod, cls: "paid" };
+    return { label: rawMethod ? `PAID / ${rawMethod.toUpperCase()}` : "PAID", sub: rawMethod || "Paid order", cls: "paid" };
+  }
+
+  return { label: status ? status.toUpperCase() : "UNKNOWN", sub: rawMethod || "No payment method", cls: "neutral" };
+}
+
+function orderNeedsPayment(order) {
+  const status = String(order?.paymentStatus || "").toLowerCase();
+  const method = String(order?.paymentMethod || "").toLowerCase();
+
+  if (status === "cancelled" || status === "paid" || status === "complimentary") return false;
+
+  return (
+    status === "unpaid" ||
+    method.includes("unpaid") ||
+    method.includes("pay later") ||
+    method.includes("cash on delivery") ||
+    method === "cod"
+  );
+}
+
+function safeItems(items) {
+  return Array.isArray(items) ? items : [];
+}
+
+function EditOrderModal({ token, order, menuItems, onClose, onSaved }) {
+  const [items, setItems] = useState(safeItems(order.items).map((item) => ({
+    ...item,
+    qty: Number(item.qty || item.quantity || 1),
+    quantity: Number(item.qty || item.quantity || 1),
+    price: Number(item.price || 0)
+  })));
+  const [search, setSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const settings = order.restaurantSettings || {};
+  const taxPercent = Number(order.taxPercent || settings.taxPercent || 0);
+  const serviceChargePercent = Number(order.serviceChargePercent || settings.serviceChargePercent || 0);
+  const systemDiscountAmount = Number(order.systemDiscountAmount || 0);
+  const loyaltyRedeemedAmount = Number(order.loyaltyRedeemedAmount || 0);
+
+  const subtotal = items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.qty || 1), 0);
+  const safeDiscount = Math.min(subtotal, Math.max(0, systemDiscountAmount));
+  const discountedSubtotal = Math.max(0, subtotal - safeDiscount);
+  const tax = Math.round(discountedSubtotal * (taxPercent / 100));
+  const serviceChargeAmount = Math.round(discountedSubtotal * (serviceChargePercent / 100));
+  const total = Math.max(0, discountedSubtotal + tax + serviceChargeAmount - loyaltyRedeemedAmount);
+
+  const filteredMenu = menuItems.filter((item) => {
+    const q = search.toLowerCase();
+    return (
+      !q ||
+      String(item.name || "").toLowerCase().includes(q) ||
+      String(item.category || "").toLowerCase().includes(q)
+    );
+  });
+
+  function addItem(item) {
+    setItems((prev) => {
+      const found = prev.find((x) => x.id === item.id);
+
+      if (found) {
+        return prev.map((x) =>
+          x.id === item.id
+            ? {
+                ...x,
+                qty: Number(x.qty || 1) + 1,
+                quantity: Number(x.qty || 1) + 1
+              }
+            : x
+        );
+      }
+
+      return [
+        ...prev,
+        {
+          ...item,
+          qty: 1,
+          quantity: 1,
+          price: Number(item.price || 0),
+          category: item.category || "Menu"
+        }
+      ];
+    });
+  }
+
+  function changeQty(id, delta) {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              qty: Math.max(1, Number(item.qty || 1) + delta),
+              quantity: Math.max(1, Number(item.qty || 1) + delta)
+            }
+          : item
+      )
+    );
+  }
+
+  function removeItem(id) {
+    setItems((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  async function saveEdit() {
+    if (!items.length) {
+      alert("Order must contain at least one item. Use Cancel Order if you want to cancel it.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const res = await api(token).patch(`/api/order-edit/${order.id || order.orderNo}`, {
+        items,
+        orderStatus: order.orderStatus === "served" || order.orderStatus === "completed" ? order.orderStatus : "placed",
+        kitchenStatus: "placed"
+      });
+
+      alert("Order updated successfully. KDS will show updated items after refresh.");
+      onSaved(res.data.order);
+      onClose();
+    } catch (error) {
+      alert(error.response?.data?.message || "Failed to update order.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="orders-modal-backdrop">
+      <div className="orders-edit-modal">
+        <div className="orders-modal-head">
+          <div>
+            <h2>Edit Order {order.orderNo}</h2>
+            <p>Update items, quantities, and send changes back to kitchen.</p>
+          </div>
+
+          <button className="orders-icon-btn" onClick={onClose}>?</button>
+        </div>
+
+        <div className="orders-edit-grid">
+          <section className="orders-edit-left">
+            <div className="orders-section-title">Current Order Items</div>
+
+            {items.length === 0 ? (
+              <div className="orders-empty">No items in order.</div>
+            ) : (
+              <div className="orders-edit-items">
+                {items.map((item) => (
+                  <div className="orders-edit-item" key={item.id}>
+                    <div>
+                      <strong>{item.name}</strong>
+                      <p>{item.category || item.subtitle || "Menu Item"}</p>
+                      <span>{money(order, item.price)} � {item.qty}</span>
+                    </div>
+
+                    <div className="orders-edit-actions">
+                      <button onClick={() => changeQty(item.id, -1)}>-</button>
+                      <strong>{item.qty}</strong>
+                      <button onClick={() => changeQty(item.id, 1)}>+</button>
+                      <button className="danger" onClick={() => removeItem(item.id)}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="orders-edit-right">
+            <div className="orders-section-title">Add More Items</div>
+
+            <input
+              className="orders-search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search menu item..."
+            />
+
+            <div className="orders-menu-add-list">
+              {filteredMenu.slice(0, 80).map((item) => (
+                <button className="orders-menu-add-card" key={item.id} onClick={() => addItem(item)}>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <p>{item.category || "Menu"}</p>
+                  </div>
+                  <span>{money(order, item.price)}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <aside className="orders-edit-summary">
+            <h3>Updated Bill</h3>
+
+            <div className="orders-summary-row">
+              <span>Subtotal</span>
+              <strong>{money(order, subtotal)}</strong>
+            </div>
+
+            <div className="orders-summary-row">
+              <span>Discount</span>
+              <strong>- {money(order, safeDiscount)}</strong>
+            </div>
+
+            <div className="orders-summary-row">
+              <span>{order.taxName || "Tax"} ({taxPercent}%)</span>
+              <strong>{money(order, tax)}</strong>
+            </div>
+
+            <div className="orders-summary-row">
+              <span>{order.serviceChargeName || "Service"} ({serviceChargePercent}%)</span>
+              <strong>{money(order, serviceChargeAmount)}</strong>
+            </div>
+
+            <div className="orders-summary-row">
+              <span>Loyalty</span>
+              <strong>- {money(order, loyaltyRedeemedAmount)}</strong>
+            </div>
+
+            <div className="orders-line" />
+
+            <div className="orders-summary-row total">
+              <span>Grand Total</span>
+              <strong>{money(order, total)}</strong>
+            </div>
+
+            <button className="orders-primary-btn" onClick={saveEdit} disabled={saving}>
+              {saving ? "Saving..." : "Save Edited Order"}
+            </button>
+
+            <button className="orders-soft-btn" onClick={onClose}>
+              Close
+            </button>
+          </aside>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function PayOrderModal({ order, onClose, onPaid, paying }) {
+  const [method, setMethod] = useState("Cash");
+  const [reference, setReference] = useState("");
+  const [note, setNote] = useState("Customer paid unpaid bill.");
+
+  return (
+    <div className="orders-modal-backdrop">
+      <div className="orders-pay-modal">
+        <div className="orders-modal-head">
+          <div>
+            <h2>Pay Unpaid Bill</h2>
+            <p>{order.orderNo || "Order"} · {money(order, order.total)}</p>
+            <span className={`orders-payment-badge ${paymentBadge(order).cls}`}>
+              {paymentBadge(order).label}
+            </span>
+          </div>
+
+          <button className="orders-icon-btn" onClick={onClose}>×</button>
+        </div>
+
+        <div className="orders-pay-body">
+          <div className="orders-pay-amount-box">
+            <span>Total to Receive</span>
+            <strong>{money(order, order.total)}</strong>
+          </div>
+
+          <div className="orders-pay-method-grid">
+            {payNowMethods.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={`orders-pay-method ${method === item ? "active" : ""}`}
+                onClick={() => setMethod(item)}
+              >
+                <strong>{item}</strong>
+                <span>{item === "Card" ? "POS / Visa / Master" : item === "Cash" ? "Cash counter" : "Digital payment"}</span>
+              </button>
+            ))}
+          </div>
+
+          <label className="orders-pay-field">
+            <span>Reference / Transaction ID</span>
+            <input
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder="Optional"
+            />
+          </label>
+
+          <label className="orders-pay-field">
+            <span>Payment Note</span>
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Optional note"
+            />
+          </label>
+
+          <div className="orders-pay-actions">
+            <button className="orders-soft-btn" onClick={onClose}>Cancel</button>
+            <button
+              className="orders-primary-btn"
+              disabled={paying}
+              onClick={() => onPaid(order, { paymentMethod: method, paymentReference: reference, note })}
+            >
+              {paying ? "Saving..." : `Mark Paid / ${method}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OrderDetailsModal({ order, onClose, onPrint, onEdit, onCancel, onPay }) {
+  const items = safeItems(order.items);
+  const customerName = `${order?.customer?.firstName || ""} ${order?.customer?.lastName || ""}`.trim();
+
+  return (
+    <div className="orders-modal-backdrop">
+      <div className="orders-details-modal">
+        <div className="orders-modal-head">
+          <div>
+            <h2>{order.orderNo || "Order Details"}</h2>
+            <p>{normalizeMode(order.mode)} � {formatDate(order.createdAt || order.date)}</p>
+            <span className={`orders-payment-badge ${paymentBadge(order).cls}`}>
+              {paymentBadge(order).label}
+            </span>
+          </div>
+
+          <button className="orders-icon-btn" onClick={onClose}>?</button>
+        </div>
+
+        <div className="orders-details-grid">
+          <main className="orders-details-main">
+            <div className="orders-info-grid">
+              <div><span>Payment</span><strong>{paymentBadge(order).label} � {paymentBadge(order).sub}</strong></div>
+              <div><span>Customer</span><strong>{customerName || "Walk-in"}</strong></div>
+              <div><span>Phone</span><strong>{order.phone || "N/A"}</strong></div>
+              <div><span>Waiter</span><strong>{order.waiterName || "N/A"}</strong></div>
+              <div><span>Rider</span><strong>{order.riderName || "N/A"}</strong></div>
+              <div><span>Kitchen</span><strong>{order.kitchenStatus || order.orderStatus || "N/A"}</strong></div>
+            </div>
+
+            <div className="orders-section-title">Items</div>
+
+            <div className="orders-details-items">
+              {items.map((item, index) => {
+                const qty = Number(item.qty || item.quantity || 1);
+                const price = Number(item.price || 0);
+
+                return (
+                  <div className="orders-detail-item" key={`${item.id || item.name}-${index}`}>
+                    <div>
+                      <strong>{item.name}</strong>
+                      <p>{item.category || item.subtitle || "Menu Item"}</p>
+                    </div>
+                    <span>{qty} � {money(order, price)}</span>
+                    <strong>{money(order, qty * price)}</strong>
+                  </div>
+                );
+              })}
+            </div>
+          </main>
+
+          <aside className="orders-details-summary">
+            <h3>Bill Summary</h3>
+
+            <div className="orders-summary-row"><span>Subtotal</span><strong>{money(order, order.subtotal)}</strong></div>
+            <div className="orders-summary-row"><span>Discount</span><strong>- {money(order, order.systemDiscountAmount || 0)}</strong></div>
+            <div className="orders-summary-row"><span>{order.taxName || "Tax"}</span><strong>{money(order, order.tax)}</strong></div>
+            <div className="orders-summary-row"><span>{order.serviceChargeName || "Service"}</span><strong>{money(order, order.serviceChargeAmount)}</strong></div>
+            <div className="orders-summary-row"><span>Loyalty</span><strong>- {money(order, order.loyaltyRedeemedAmount || 0)}</strong></div>
+
+            <div className="orders-line" />
+
+            <div className="orders-summary-row total"><span>Total</span><strong>{money(order, order.total)}</strong></div>
+
+            {order.paymentStatus !== "cancelled" ? (
+              <>
+                {orderNeedsPayment(order) ? (
+                  <button className="orders-pay-now-btn" onClick={() => onPay(order)}>
+                    Pay Now
+                  </button>
+                ) : null}
+
+                <button className="orders-primary-btn" onClick={() => onEdit(order)}>
+                  Edit Order
+                </button>
+
+                <button className="orders-danger-btn" onClick={() => onCancel(order)}>
+                  Cancel Order
+                </button>
+              </>
+            ) : (
+              <div className="orders-cancelled-box">This order is cancelled.</div>
+            )}
+
+            <button
+              className="orders-soft-btn"
+              onClick={() => onPrint(order)}
+              disabled={!["paid", "complimentary"].includes(order.paymentStatus)}
+            >
+              Reprint Receipt
+            </button>
+
+            <button className="orders-soft-btn" onClick={onClose}>
+              Close
+            </button>
+          </aside>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OrderCard({ order, onView, onPrint, onEdit, onCancel, onPay }) {
+  const customerName = `${order?.customer?.firstName || ""} ${order?.customer?.lastName || ""}`.trim();
+
+  return (
+    <div className="orders-card">
+      <div className="orders-card-top">
+        <div>
+          <h3>{order.orderNo || "Order"}</h3>
+          <p>{formatDate(order.createdAt || order.date)}</p>
+        </div>
+        <div className="orders-card-icon">??</div>
+      </div>
+
+      <div className={`orders-card-payment-top ${paymentBadge(order).cls}`}>
+        <strong>{paymentBadge(order).label}</strong>
+        <span>{paymentBadge(order).sub}</span>
+      </div>
+
+      <div className="orders-pill-row">
+        <span style={{ color: statusColor(order.paymentStatus) }}>{paymentBadge(order).label}</span>
+        <span>{normalizeMode(order.mode)}</span>
+        <span>{order.items?.length || 0} items</span>
+        <span>{customerName || order.phone || "Walk-in"}</span>
+      </div>
+
+      <div className="orders-card-total">{money(order, order.total)}</div>
+
+      <div className="orders-card-actions">
+        {orderNeedsPayment(order) ? (
+          <button className="pay" onClick={() => onPay(order)}>Pay Now</button>
+        ) : null}
+        <button onClick={() => onView(order)}>Details</button>
+        <button onClick={() => onEdit(order)} disabled={order.paymentStatus === "cancelled"}>Edit</button>
+        <button onClick={() => onPrint(order)} disabled={!["paid", "complimentary"].includes(order.paymentStatus)}>Receipt</button>
+        <button className="danger" onClick={() => onCancel(order)} disabled={order.paymentStatus === "cancelled"}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+export default function OrdersPanel({ token, onBack }) {
+  const [orders, setOrders] = useState([]);
+  const [settings, setSettings] = useState(defaultSettings);
+  const [menuItems, setMenuItems] = useState([]);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [modeFilter, setModeFilter] = useState("all");
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [editOrder, setEditOrder] = useState(null);
+  const [receiptOrder, setReceiptOrder] = useState(null);
+  const [payOrder, setPayOrder] = useState(null);
+  const [payingOrder, setPayingOrder] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  async function loadOrders() {
+    setLoading(true);
+
+    try {
+      const res = await api(token).get("/api/orders");
+      const list = Array.isArray(res.data) ? res.data : res.data.orders || [];
+      setOrders(list);
+    } catch (error) {
+      alert(error.response?.data?.message || "Failed to load orders.");
+      setOrders([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadSettings() {
+    try {
+      const res = await api(token).get("/api/restaurant-settings");
+      setSettings({ ...defaultSettings, ...(res.data.settings || {}) });
+    } catch {
+      setSettings(defaultSettings);
+    }
+  }
+
+  async function loadMenu() {
+    try {
+      const res = await api(token).get("/api/menu");
+      const items = (res.data.items || [])
+        .filter((item) => item.isActive !== false && item.isAvailable !== false)
+        .map((item) => ({
+          ...item,
+          price: Number(item.price || 0),
+          qty: 1,
+          quantity: 1,
+          category: item.category || item.categoryName || "Menu"
+        }));
+
+      setMenuItems(items);
+    } catch {
+      setMenuItems([]);
+    }
+  }
+
+  useEffect(() => {
+    loadOrders();
+    loadSettings();
+    loadMenu();
+  }, []);
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      const q = search.toLowerCase();
+      const customerName = `${order?.customer?.firstName || ""} ${order?.customer?.lastName || ""}`.trim();
+
+      const bySearch =
+        !q ||
+        String(order.orderNo || "").toLowerCase().includes(q) ||
+        String(order.phone || "").toLowerCase().includes(q) ||
+        String(customerName || "").toLowerCase().includes(q) ||
+        String(order.paymentMethod || "").toLowerCase().includes(q) ||
+        String(order.paymentStatus || "").toLowerCase().includes(q) ||
+        String(order.mode || "").toLowerCase().includes(q);
+
+      const byStatus = statusFilter === "all" || order.paymentStatus === statusFilter;
+      const byMode = modeFilter === "all" || order.mode === modeFilter;
+
+      return bySearch && byStatus && byMode;
+    });
+  }, [orders, search, statusFilter, modeFilter]);
+
+  async function cancelOrder(order) {
+    const reason = prompt(`Cancel ${order.orderNo}? Enter reason:`, "Customer cancelled / order mistake");
+
+    if (reason === null) return;
+
+    try {
+      const res = await api(token).patch(`/api/order-edit/${order.id || order.orderNo}/cancel`, {
+        reason
+      });
+
+      setOrders((prev) => prev.map((item) => item.id === order.id ? res.data.order : item));
+      setSelectedOrder(null);
+      alert("Order cancelled successfully.");
+    } catch (error) {
+      alert(error.response?.data?.message || "Failed to cancel order.");
+    }
+  }
+
+  function updateOrderInState(updatedOrder) {
+    setOrders((prev) =>
+      prev.map((item) =>
+        item.id === updatedOrder.id || item.orderNo === updatedOrder.orderNo ? updatedOrder : item
+      )
+    );
+    setSelectedOrder(null);
+  }
+
+  async function markOrderPaid(order, paymentData) {
+    setPayingOrder(true);
+
+    try {
+      const res = await api(token).patch(`/api/order-edit/${order.id || order.orderNo}/pay`, paymentData);
+      const updatedOrder = res.data.order;
+
+      setOrders((prev) =>
+        prev.map((item) =>
+          item.id === updatedOrder.id || item.orderNo === updatedOrder.orderNo ? updatedOrder : item
+        )
+      );
+
+      setSelectedOrder((prev) =>
+        prev && (prev.id === updatedOrder.id || prev.orderNo === updatedOrder.orderNo) ? updatedOrder : prev
+      );
+
+      setPayOrder(null);
+      setReceiptOrder(updatedOrder);
+      alert("Order marked as paid successfully.");
+    } catch (error) {
+      alert(error.response?.data?.message || "Failed to mark order as paid.");
+    } finally {
+      setPayingOrder(false);
+    }
+  }
+
+  return (
+    <div className="orders-page">
+      <style>
+        {`
+          .orders-page {
+            min-height: 100vh;
+            padding: 18px;
+            color: white;
+            background:
+              radial-gradient(circle at 12% 18%, rgba(34,211,238,.12), transparent 26%),
+              radial-gradient(circle at 86% 12%, rgba(168,85,247,.12), transparent 26%),
+              #020617;
+          }
+
+          .orders-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            gap: 14px;
+            margin-bottom: 16px;
+          }
+
+          .orders-back,
+          .orders-primary-btn,
+          .orders-soft-btn,
+          .orders-danger-btn,
+          .orders-icon-btn {
+            border: 0;
+            cursor: pointer;
+            font-weight: 900;
+            color: white;
+            transition: .18s ease;
+          }
+
+          .orders-back,
+          .orders-soft-btn,
+          .orders-icon-btn {
+            background: rgba(255,255,255,.08);
+            border: 1px solid rgba(255,255,255,.10);
+          }
+
+          .orders-back {
+            height: 42px;
+            padding: 0 14px;
+            border-radius: 14px;
+          }
+
+          .orders-icon-btn {
+            width: 46px;
+            height: 46px;
+            border-radius: 16px;
+          }
+
+          .orders-primary-btn {
+            height: 46px;
+            padding: 0 16px;
+            border-radius: 16px;
+            background: linear-gradient(135deg,#06b6d4,#2563eb);
+          }
+
+          .orders-danger-btn {
+            height: 46px;
+            padding: 0 16px;
+            border-radius: 16px;
+            background: rgba(239,68,68,.86);
+          }
+
+          .orders-soft-btn {
+            height: 46px;
+            padding: 0 16px;
+            border-radius: 16px;
+          }
+
+          .orders-soft-btn:disabled,
+          .orders-primary-btn:disabled,
+          .orders-danger-btn:disabled,
+          .orders-card-actions button:disabled {
+            opacity: .45;
+            cursor: not-allowed;
+          }
+
+
+          .orders-card-payment-top {
+            margin: 10px 0 8px;
+            padding: 10px 12px;
+            border-radius: 16px;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.06);
+          }
+
+          .orders-card-payment-top strong,
+          .orders-payment-badge {
+            font-size: 12px;
+            font-weight: 1000;
+            letter-spacing: .04em;
+          }
+
+          .orders-card-payment-top span {
+            font-size: 12px;
+            color: #cbd5e1;
+            font-weight: 800;
+          }
+
+          .orders-payment-badge {
+            display: inline-flex;
+            margin-top: 9px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.10);
+          }
+
+          .orders-card-payment-top.paid,
+          .orders-payment-badge.paid {
+            color: #86efac;
+            background: rgba(34,197,94,.13);
+            border-color: rgba(34,197,94,.25);
+          }
+
+          .orders-card-payment-top.unpaid,
+          .orders-payment-badge.unpaid {
+            color: #fde68a;
+            background: rgba(250,204,21,.13);
+            border-color: rgba(250,204,21,.25);
+          }
+
+          .orders-card-payment-top.comp,
+          .orders-payment-badge.comp {
+            color: #a5f3fc;
+            background: rgba(34,211,238,.13);
+            border-color: rgba(34,211,238,.25);
+          }
+
+          .orders-card-payment-top.cancelled,
+          .orders-payment-badge.cancelled {
+            color: #fca5a5;
+            background: rgba(239,68,68,.13);
+            border-color: rgba(239,68,68,.25);
+          }
+
+
+          .orders-title {
+            margin: 12px 0 4px;
+            font-size: 34px;
+            font-weight: 1000;
+            letter-spacing: -.04em;
+          }
+
+          .orders-sub {
+            margin: 0;
+            color: #94a3b8;
+          }
+
+          .orders-toolbar {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 12px;
+            padding: 14px;
+            border-radius: 24px;
+            background: rgba(15,23,42,.72);
+            border: 1px solid rgba(255,255,255,.10);
+            margin-bottom: 14px;
+          }
+
+          .orders-search {
+            height: 46px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.07);
+            color: white;
+            padding: 0 14px;
+            outline: none;
+          }
+
+          .orders-filter-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+          }
+
+          .orders-filter-row button {
+            height: 38px;
+            padding: 0 13px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.07);
+            color: white;
+            cursor: pointer;
+            font-weight: 800;
+          }
+
+          .orders-filter-row button.active {
+            background: rgba(34,211,238,.20);
+            border-color: rgba(34,211,238,.32);
+          }
+
+          .orders-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 14px;
+          }
+
+          .orders-card {
+            padding: 14px;
+            border-radius: 24px;
+            background: rgba(15,23,42,.78);
+            border: 1px solid rgba(255,255,255,.10);
+            box-shadow: 0 18px 40px rgba(0,0,0,.22);
+          }
+
+          .orders-card-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+          }
+
+          .orders-card h3 {
+            margin: 0;
+            font-size: 20px;
+          }
+
+          .orders-card p {
+            margin: 5px 0 0;
+            color: #94a3b8;
+            font-size: 13px;
+          }
+
+          .orders-card-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 18px;
+            display: grid;
+            place-items: center;
+            background: rgba(34,211,238,.12);
+            font-size: 25px;
+          }
+
+          .orders-pill-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 12px;
+          }
+
+          .orders-pill-row span {
+            padding: 8px 10px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.07);
+            border: 1px solid rgba(255,255,255,.08);
+            font-size: 12px;
+            font-weight: 850;
+          }
+
+          .orders-card-total {
+            margin-top: 12px;
+            font-size: 24px;
+            font-weight: 1000;
+            color: #86efac;
+          }
+
+          .orders-card-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+            gap: 8px;
+            margin-top: 12px;
+          }
+
+          .orders-card-actions button {
+            height: 38px;
+            border-radius: 13px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.08);
+            color: white;
+            cursor: pointer;
+            font-weight: 850;
+          }
+
+          .orders-card-actions button.danger {
+            background: rgba(239,68,68,.15);
+            color: #fecaca;
+          }
+
+          .orders-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: rgba(2,6,23,.72);
+            backdrop-filter: blur(10px);
+            padding: 18px;
+            display: grid;
+            place-items: center;
+          }
+
+          .orders-details-modal,
+          .orders-edit-modal {
+            width: min(1280px, calc(100vw - 36px));
+            max-height: calc(100vh - 36px);
+            overflow: hidden;
+            display: grid;
+            grid-template-rows: auto 1fr;
+            border-radius: 30px;
+            background: #0f172a;
+            border: 1px solid rgba(255,255,255,.12);
+            box-shadow: 0 30px 90px rgba(0,0,0,.45);
+          }
+
+          .orders-modal-head {
+            padding: 20px 22px;
+            border-bottom: 1px solid rgba(255,255,255,.09);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+          }
+
+          .orders-modal-head h2 {
+            margin: 0;
+            font-size: 25px;
+          }
+
+          .orders-modal-head p {
+            margin: 6px 0 0;
+            color: #94a3b8;
+          }
+
+          .orders-details-grid,
+          .orders-edit-grid {
+            min-height: 0;
+            overflow: hidden;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 360px;
+            gap: 14px;
+            padding: 16px;
+          }
+
+          .orders-edit-grid {
+            grid-template-columns: minmax(0, 1fr) minmax(320px, .8fr) 340px;
+          }
+
+          .orders-details-main,
+          .orders-edit-left,
+          .orders-edit-right,
+          .orders-details-summary,
+          .orders-edit-summary {
+            border-radius: 24px;
+            background: rgba(255,255,255,.055);
+            border: 1px solid rgba(255,255,255,.09);
+            padding: 14px;
+            min-height: 0;
+            overflow-y: auto;
+          }
+
+          .orders-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 10px;
+            margin-bottom: 16px;
+          }
+
+          .orders-info-grid div {
+            padding: 12px;
+            border-radius: 17px;
+            background: rgba(2,6,23,.35);
+            border: 1px solid rgba(255,255,255,.08);
+          }
+
+          .orders-info-grid span {
+            display: block;
+            color: #94a3b8;
+            font-size: 12px;
+            margin-bottom: 5px;
+          }
+
+          .orders-section-title {
+            font-weight: 1000;
+            margin-bottom: 12px;
+            font-size: 17px;
+          }
+
+          .orders-details-items,
+          .orders-edit-items,
+          .orders-menu-add-list {
+            display: grid;
+            gap: 10px;
+          }
+
+          .orders-detail-item,
+          .orders-edit-item,
+          .orders-menu-add-card {
+            padding: 12px;
+            border-radius: 18px;
+            background: rgba(2,6,23,.35);
+            border: 1px solid rgba(255,255,255,.08);
+          }
+
+          .orders-detail-item {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: 12px;
+            align-items: center;
+          }
+
+          .orders-detail-item p,
+          .orders-edit-item p,
+          .orders-menu-add-card p {
+            margin: 5px 0 0;
+            color: #94a3b8;
+            font-size: 13px;
+          }
+
+          .orders-edit-item {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 12px;
+            align-items: center;
+          }
+
+          .orders-edit-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+
+          .orders-edit-actions button,
+          .orders-menu-add-card {
+            border: 0;
+            color: white;
+            cursor: pointer;
+            font-weight: 850;
+          }
+
+          .orders-edit-actions button {
+            min-width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            background: rgba(255,255,255,.08);
+          }
+
+          .orders-edit-actions button.danger {
+            padding: 0 10px;
+            background: rgba(239,68,68,.15);
+            color: #fecaca;
+          }
+
+          .orders-menu-add-card {
+            width: 100%;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+
+          .orders-menu-add-card:hover {
+            background: rgba(34,211,238,.12);
+          }
+
+          .orders-summary-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 11px;
+            color: #cbd5e1;
+            font-weight: 800;
+          }
+
+          .orders-summary-row.total {
+            color: white;
+            font-size: 19px;
+            font-weight: 1000;
+          }
+
+          .orders-line {
+            height: 1px;
+            background: rgba(255,255,255,.12);
+            margin: 12px 0;
+          }
+
+          .orders-details-summary,
+          .orders-edit-summary {
+            display: grid;
+            align-content: start;
+            gap: 10px;
+          }
+
+          .orders-cancelled-box,
+          .orders-empty {
+            padding: 14px;
+            border-radius: 18px;
+            background: rgba(239,68,68,.12);
+            border: 1px solid rgba(239,68,68,.22);
+            color: #fecaca;
+            font-weight: 900;
+          }
+
+
+          .orders-card-actions button.pay,
+          .orders-pay-now-btn {
+            background: linear-gradient(135deg,#22c55e,#16a34a) !important;
+            color: white !important;
+            border: 0 !important;
+          }
+
+          .orders-pay-modal {
+            width: min(620px, calc(100vw - 36px));
+            max-height: calc(100vh - 36px);
+            overflow-y: auto;
+            border-radius: 30px;
+            background: #0f172a;
+            border: 1px solid rgba(255,255,255,.12);
+            box-shadow: 0 30px 90px rgba(0,0,0,.45);
+          }
+
+          .orders-pay-body {
+            padding: 18px;
+            display: grid;
+            gap: 14px;
+          }
+
+          .orders-pay-amount-box {
+            border-radius: 24px;
+            padding: 18px;
+            background: linear-gradient(135deg, rgba(34,197,94,.16), rgba(34,211,238,.12));
+            border: 1px solid rgba(34,197,94,.25);
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+          }
+
+          .orders-pay-amount-box span {
+            color: #bbf7d0;
+            font-weight: 900;
+          }
+
+          .orders-pay-amount-box strong {
+            font-size: 30px;
+            font-weight: 1000;
+          }
+
+          .orders-pay-method-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+          }
+
+          .orders-pay-method {
+            min-height: 84px;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.065);
+            color: white;
+            cursor: pointer;
+            text-align: left;
+            padding: 12px;
+            display: grid;
+            gap: 5px;
+          }
+
+          .orders-pay-method.active {
+            background: rgba(34,197,94,.16);
+            border-color: rgba(34,197,94,.34);
+          }
+
+          .orders-pay-method span {
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 800;
+          }
+
+          .orders-pay-field {
+            display: grid;
+            gap: 8px;
+          }
+
+          .orders-pay-field span {
+            color: #cbd5e1;
+            font-size: 12px;
+            font-weight: 850;
+          }
+
+          .orders-pay-field input {
+            height: 45px;
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.07);
+            color: white;
+            padding: 0 13px;
+            outline: none;
+            font-weight: 800;
+          }
+
+          .orders-pay-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+          }
+
+          @media (max-width: 1050px) {
+            .orders-toolbar,
+            .orders-details-grid,
+            .orders-edit-grid {
+              grid-template-columns: 1fr;
+            }
+
+            .orders-details-modal,
+            .orders-edit-modal {
+              overflow-y: auto;
+            }
+
+            .orders-details-main,
+            .orders-edit-left,
+            .orders-edit-right,
+            .orders-details-summary,
+            .orders-edit-summary {
+              overflow: visible;
+            }
+          }
+        `}
+      </style>
+
+      <div className="orders-head">
+        <div>
+          <button className="orders-back" onClick={onBack}>? Back</button>
+          <h1 className="orders-title">Orders Management</h1>
+          <p className="orders-sub">Edit orders, add/delete items, cancel orders and reprint receipts.</p>
+        </div>
+
+        <button className="orders-primary-btn" onClick={loadOrders}>Refresh Orders</button>
+      </div>
+
+      <div className="orders-toolbar">
+        <input
+          className="orders-search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search order, phone, customer, payment..."
+        />
+
+        <div className="orders-filter-row">
+          {["all", "paid", "unpaid", "complimentary", "cancelled"].map((item) => (
+            <button
+              key={item}
+              className={statusFilter === item ? "active" : ""}
+              onClick={() => setStatusFilter(item)}
+            >
+              {item}
+            </button>
+          ))}
+
+          {["all", "dine_in", "take_away", "delivery", "drive_thru"].map((item) => (
+            <button
+              key={item}
+              className={modeFilter === item ? "active" : ""}
+              onClick={() => setModeFilter(item)}
+            >
+              {item === "all" ? "All Modes" : normalizeMode(item)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="orders-empty">Loading orders...</div>
+      ) : filteredOrders.length === 0 ? (
+        <div className="orders-empty">No orders found.</div>
+      ) : (
+        <div className="orders-grid">
+          {filteredOrders.map((order) => (
+            <OrderCard
+              key={order.id || order.orderNo}
+              order={order}
+              onView={setSelectedOrder}
+              onPrint={setReceiptOrder}
+              onEdit={setEditOrder}
+              onCancel={cancelOrder}
+              onPay={setPayOrder}
+            />
+          ))}
+        </div>
+      )}
+
+      {selectedOrder ? (
+        <OrderDetailsModal
+          order={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          onPrint={setReceiptOrder}
+          onEdit={setEditOrder}
+          onCancel={cancelOrder}
+          onPay={setPayOrder}
+        />
+      ) : null}
+
+      {editOrder ? (
+        <EditOrderModal
+          token={token}
+          order={editOrder}
+          menuItems={menuItems}
+          onClose={() => setEditOrder(null)}
+          onSaved={updateOrderInState}
+        />
+      ) : null}
+
+      {payOrder ? (
+        <PayOrderModal
+          order={payOrder}
+          onClose={() => setPayOrder(null)}
+          onPaid={markOrderPaid}
+          paying={payingOrder}
+        />
+      ) : null}
+
+      {receiptOrder ? (
+        <ThermalReceipt
+          order={receiptOrder}
+          settings={settings}
+          onClose={() => setReceiptOrder(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+
+

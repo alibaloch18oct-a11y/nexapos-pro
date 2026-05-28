@@ -75,8 +75,8 @@ const bottomModules = [
   { key: "orders", name: "Orders", icon: "📋", bg: "linear-gradient(135deg,#e5e7eb,#94a3b8)", dark: true },
   { key: "drive_thru_queue", name: "Dispatch", icon: "📍", bg: "linear-gradient(135deg,#22c55e,#06b6d4)", dark: true },
   { key: "staff", name: "Attendance", icon: "🕘", bg: "linear-gradient(135deg,#ec4899,#8b5cf6)" },
-  { key: "staff", name: "Staff", icon: "👥", bg: "linear-gradient(135deg,#bae6fd,#60a5fa)", dark: true },
-  { key: "staff", name: "Cashier", icon: "💳", bg: "linear-gradient(135deg,#ccfbf1,#2dd4bf)", dark: true },
+  { key: "staff", name: "Staff", subtitle: "Branch staff control", icon: "👥", bg: "linear-gradient(135deg,#dbeafe,#60a5fa)", dark: true },
+  { key: "cashier", modeKey: "walk_in", name: "Cashier", subtitle: "Cashier POS Terminal", icon: "🧾", bg: "linear-gradient(135deg,#ccfbf1,#2dd4bf)", dark: true },
   { key: "kds", name: "KDS", icon: "🖥️", bg: "linear-gradient(135deg,#94a3b8,#475569)" },
   { key: "analytics", name: "Reports", icon: "📈", bg: "linear-gradient(135deg,#ffffff,#c4b5fd)", dark: true },
   { key: "restaurant_settings", name: "Printer", icon: "🖨️", bg: "linear-gradient(135deg,#111827,#64748b)" },
@@ -93,7 +93,7 @@ function formatMoney(value) {
   return `Rs ${Math.round(Number(value || 0)).toLocaleString()}`;
 }
 
-export default function ClientDashboard({ token, session, onOpenModule }) {
+export default function ClientDashboard({ token, session, roleContext, onOpenModule }) {
   const [clock, setClock] = useState(new Date());
   const [stats, setStats] = useState({
     todaySales: 0,
@@ -104,6 +104,29 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
   const [demoSeeding, setDemoSeeding] = useState(false);
   const [demoStatus, setDemoStatus] = useState("");
   const [displayMode, setDisplayMode] = useState("browser");
+  const [selectedBranchId, setSelectedBranchId] = useState(() => localStorage.getItem("nexapos_selected_branch_id") || "");
+
+  const access = roleContext || session?.roleContext || {};
+  const permissions = access?.permissions || {};
+  const role = access?.user?.role || session?.user?.role || "owner";
+  const branches = access?.branches || [];
+  const activeBranch = access?.activeBranch || null;
+  const isOwnerLike = permissions.canViewAllBranches === true;
+  const canUsePOS = permissions.canUsePOS !== false;
+  const canUseKDS = permissions.canUseKDS === true || isOwnerLike;
+  const canUseDelivery = permissions.canUseDelivery === true || isOwnerLike || canUsePOS;
+  const canViewReports = permissions.canViewReports === true || isOwnerLike;
+  const canManageMenu = permissions.canManageMenu === true || isOwnerLike;
+  const canManageInventory = permissions.canManageInventory === true || isOwnerLike;
+  const canManageUsers = permissions.canManageUsers === true || isOwnerLike;
+  const canViewCosts = permissions.canViewCosts === true;
+  const canViewProfitLoss = permissions.canViewProfitLoss === true;
+  const roleLabel = permissions.label || role || "Restaurant User";
+  const selectedBranch =
+    selectedBranchId === "all"
+      ? null
+      : branches.find((branch) => branch.id === selectedBranchId) || activeBranch || null;
+  const effectiveBranchId = isOwnerLike ? (selectedBranchId === "all" ? "" : selectedBranchId) : activeBranch?.id || "";
 
   useEffect(() => {
     const timer = setInterval(() => setClock(new Date()), 30000);
@@ -129,10 +152,65 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
     };
   }, []);
 
-  async function loadStats() {
+  async function loadStats(branchOverride) {
     try {
-      const res = await api(token).get("/api/client/dashboard");
-      setStats(res.data.stats || {});
+      const targetBranchId =
+        typeof branchOverride === "string"
+          ? branchOverride
+          : effectiveBranchId || "";
+
+      const query =
+        targetBranchId
+          ? `?branchId=${encodeURIComponent(targetBranchId)}&limit=500`
+          : "?limit=500";
+
+      const [dashboardRes, ordersRes] = await Promise.allSettled([
+        api(token).get("/api/client/dashboard"),
+        api(token).get(`/api/orders${query}`)
+      ]);
+
+      const baseStats =
+        dashboardRes.status === "fulfilled"
+          ? dashboardRes.value.data.stats || {}
+          : {};
+
+      const orders =
+        ordersRes.status === "fulfilled"
+          ? Array.isArray(ordersRes.value.data)
+            ? ordersRes.value.data
+            : ordersRes.value.data.orders || []
+          : [];
+
+      const today = new Date().toDateString();
+
+      const todayOrders = orders.filter((order) => {
+        const orderDate = new Date(order.createdAt || order.date || Date.now()).toDateString();
+
+        const branchOk =
+          targetBranchId
+            ? String(order.branchId || "") === String(targetBranchId)
+            : true;
+
+        return orderDate === today && branchOk;
+      });
+
+      const paidTodayOrders = todayOrders.filter((order) => {
+        const status = String(order.paymentStatus || "").toLowerCase();
+        return status === "paid" || status === "complimentary";
+      });
+
+      const todaySales = paidTodayOrders.reduce(
+        (sum, order) => sum + Number(order.total || 0),
+        0
+      );
+
+      setStats({
+        ...baseStats,
+        todaySales,
+        todayOrders: todayOrders.length,
+        activeTables: baseStats.activeTables || 0,
+        pendingKitchenOrders: baseStats.pendingKitchenOrders || 0
+      });
     } catch {
       setStats({
         todaySales: 0,
@@ -146,6 +224,35 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
   useEffect(() => {
     loadStats();
   }, []);
+
+  // Reload stats when owner changes selected branch
+  useEffect(() => {
+    if (!access?.permissions) return;
+    loadStats(selectedBranchId === "all" ? "" : selectedBranchId);
+  }, [selectedBranchId]);
+
+  // Initialize branch selector after role context is loaded
+  useEffect(() => {
+    if (!access?.permissions) return;
+
+    const savedBranchId = localStorage.getItem("nexapos_selected_branch_id");
+
+    if (savedBranchId) {
+      setSelectedBranchId(savedBranchId);
+      return;
+    }
+
+    if (isOwnerLike) {
+      setSelectedBranchId("all");
+      localStorage.setItem("nexapos_selected_branch_id", "all");
+      return;
+    }
+
+    if (activeBranch?.id) {
+      setSelectedBranchId(activeBranch.id);
+      localStorage.setItem("nexapos_selected_branch_id", activeBranch.id);
+    }
+  }, [roleContext?.user?.id]);
 
   async function seedDemoData() {
     const ok = window.confirm(
@@ -181,6 +288,25 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
     }
   }
 
+  function moduleAllowed(key) {
+    if (!access?.permissions) return true;
+
+    if (["walk_in", "take_away", "dine_in", "drive_thru", "kiosk"].includes(key)) return canUsePOS;
+    if (key === "delivery" || key === "drive_thru_queue") return canUseDelivery;
+    if (key === "kds") return canUseKDS;
+    if (key === "analytics") return canViewReports;
+    if (key === "settings" || key === "restaurant_settings" || key === "discounts") return canManageMenu || isOwnerLike;
+    if (key === "inventory" || key === "supplier_purchases" || key === "stock_movements" || key === "menu_inventory_mapping") return canManageInventory || canViewCosts || isOwnerLike;
+    if (key === "staff") return canManageUsers || isOwnerLike;
+    if (key === "expenses") return canViewProfitLoss || isOwnerLike;
+    if (key === "orders" || key === "customers") return true;
+
+    return true;
+  }
+
+  const visibleMainModes = useMemo(() => mainModes.filter((item) => moduleAllowed(item.key)), [roleContext, session]);
+  const visibleBottomModules = useMemo(() => bottomModules.filter((item) => moduleAllowed(item.key)), [roleContext, session]);
+
   const topStats = useMemo(
     () => [
       { label: "Today Sales", value: formatMoney(stats.todaySales), icon: "💰" },
@@ -193,14 +319,45 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
 
   function openModule(item) {
     const key = item.key;
-    const sellingModes = ["walk_in", "take_away", "delivery", "drive_thru", "kiosk"];
+    const branchPayload = {
+      branchId: effectiveBranchId || null,
+      branch: selectedBranch,
+      branchMode: isOwnerLike && !effectiveBranchId ? "all" : "single",
+      roleContext: access
+    };
+
+    const branchRequiredModules = [
+      "walk_in",
+      "take_away",
+      "delivery",
+      "drive_thru",
+      "kiosk",
+      "dine_in",
+      "inventory",
+      "staff",
+      "settings",
+      "restaurant_settings",
+      "discounts",
+      "expenses",
+      "supplier_purchases",
+      "stock_movements",
+      "menu_inventory_mapping",
+      "kds"
+    ];
+
+    if (isOwnerLike && branchRequiredModules.includes(key) && !effectiveBranchId) {
+      alert("Please select a specific branch first. This module is branch-specific.");
+      return;
+    }
+    const sellingModes = ["walk_in", "take_away", "delivery", "drive_thru", "kiosk", "cashier"];
 
     if (key === "dine_in") {
       onOpenModule({
         key: "dine_in",
         modeKey: "dine_in",
         name: "Dine In",
-        description: "Dine In tables"
+        description: "Dine In tables",
+        ...branchPayload
       });
       return;
     }
@@ -208,9 +365,10 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
     if (sellingModes.includes(key)) {
       onOpenModule({
         key,
-        modeKey: key,
+        modeKey: key === "cashier" ? "walk_in" : key,
         name: item.name,
-        description: item.subtitle || `${item.name} POS mode`
+        description: item.subtitle || `${item.name} POS mode`,
+        ...branchPayload
       });
       return;
     }
@@ -218,7 +376,8 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
     onOpenModule({
       key,
       name: item.name,
-      description: item.subtitle || `${item.name} module`
+      description: item.subtitle || `${item.name} module`,
+      ...branchPayload
     });
   }
 
@@ -1012,6 +1171,18 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
             Welcome {session?.tenant?.restaurantName || session?.user?.username || "Restaurant"}
           </h1>
 
+          <div style={{
+            marginTop: 7,
+            color: "rgba(255,255,255,.82)",
+            fontSize: 11,
+            fontWeight: 900,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis"
+          }}>
+            {roleLabel} • {isOwnerLike ? (effectiveBranchId ? selectedBranch?.name : "All branches control") : activeBranch?.name || "Assigned branch"} • {canViewProfitLoss ? "Profit visible" : "Profit hidden"}
+          </div>
+
           <div className="stats-strip">
             {topStats.map((item) => (
               <div className="stat-chip" key={item.label}>
@@ -1030,10 +1201,27 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
 
           <div>
             <div className="user-name">{session?.user?.username || "Client User"}</div>
-            <select className="branch-select" defaultValue="main">
-              <option value="main">{session?.tenant?.restaurantName || "Main Branch"}</option>
-              <option value="branch2">Branch 2</option>
-              <option value="branch3">Branch 3</option>
+            <select
+              className="branch-select"
+              value={selectedBranchId || (isOwnerLike ? "all" : activeBranch?.id || "assigned")}
+              disabled={!isOwnerLike}
+              onChange={(e) => {
+                const nextBranchId = e.target.value;
+                setSelectedBranchId(nextBranchId);
+                localStorage.setItem("nexapos_selected_branch_id", nextBranchId);
+                loadStats(nextBranchId === "all" ? "" : nextBranchId);
+              }}
+            >
+              {isOwnerLike ? <option value="all">All Branches</option> : null}
+              {branches.length ? (
+                branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))
+              ) : (
+                <option value="assigned">{activeBranch?.name || session?.tenant?.restaurantName || "Main Branch"}</option>
+              )}
             </select>
           </div>
 
@@ -1051,6 +1239,9 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
             One click fills this restaurant with demo menu items, customers, staff members,
             riders, waiters, and editable dine-in tables.
           </p>
+          <div className="demo-status">
+            SaaS access: {roleLabel} • Cost {canViewCosts ? "visible" : "hidden"} • Profit {canViewProfitLoss ? "visible" : "hidden"}
+          </div>
           {demoStatus ? <div className="demo-status">{demoStatus}</div> : null}
         </div>
 
@@ -1061,7 +1252,7 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
 
       <main className="epos-center">
         <div className="main-mode-grid">
-          {mainModes.map((mode) => (
+          {visibleMainModes.map((mode) => (
             <div className="mode-tile-wrap" key={mode.key}>
               <button
                 type="button"
@@ -1085,7 +1276,7 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
 
       <section className="bottom-dock-zone">
         <div className="dock-scroll">
-          {bottomModules.map((item) => (
+          {visibleBottomModules.map((item) => (
             <button
               key={`${item.key}-${item.name}`}
               type="button"
@@ -1109,3 +1300,16 @@ export default function ClientDashboard({ token, session, onOpenModule }) {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+

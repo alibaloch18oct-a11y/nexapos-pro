@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+﻿@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
 
 :root {
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -1203,4 +1203,283 @@ body {
 .main-dashboard::after {
   pointer-events: none !important;
 }
+
+
+/* =========================================================
+   NexaPOS SaaS Global Polish
+   Prevents corrupted icons/text from breaking professional UI
+   ========================================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+button,
+.card,
+.module-card,
+.role-action,
+.bs-card,
+.orders-card,
+.kds-card,
+.pos-card,
+.menu-card {
+  min-width: 0;
+}
+
+h1,
+h2,
+h3,
+p,
+span,
+strong,
+small,
+button,
+div {
+  overflow-wrap: anywhere;
+}
+
+select {
+  color-scheme: dark;
+}
+
+select option {
+  background: #020617;
+  color: #ffffff;
+}
+
+img {
+  max-width: 100%;
+}
+
+.nexa-safe-icon,
+.card-icon,
+.module-icon,
+.bs-avatar,
+.user-avatar,
+.orders-card-icon,
+.kds-icon {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.bs-input::placeholder,
+input::placeholder,
+textarea::placeholder {
+  color: rgba(255,255,255,.52);
+}
+
+.bs-input,
+.bs-select,
+.orders-search,
+.branch-select,
+.role-select {
+  background-color: #020617 !important;
+  color: #ffffff !important;
+}
+
+.bs-select option,
+.orders-search option,
+.branch-select option,
+.role-select option {
+  background-color: #020617 !important;
+  color: #ffffff !important;
+}
+
+
+/* =========================================================
+   NexaPOS Cashier / POS Final UI Polish
+   Fixes overlapping category tabs, corrupted text overflow,
+   squeezed receipt button and cashier terminal layout.
+   ========================================================= */
+
+.pos-main,
+.pos-screen,
+.pos-shell,
+.pos-content,
+.pos-center,
+.pos-products,
+.pos-menu-area,
+.pos-checkout,
+.checkout-panel {
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.pos-category-row,
+.category-row,
+.category-tabs,
+.pos-tabs,
+.menu-category-tabs {
+  display: flex !important;
+  gap: 10px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  white-space: nowrap !important;
+  padding: 10px 0 14px !important;
+  scrollbar-width: thin;
+}
+
+.pos-category-row button,
+.category-row button,
+.category-tabs button,
+.pos-tabs button,
+.menu-category-tabs button,
+.pos-category-btn,
+.category-btn {
+  flex: 0 0 auto !important;
+  min-width: 86px !important;
+  max-width: 170px !important;
+  height: 54px !important;
+  padding: 0 14px !important;
+  border-radius: 18px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  line-height: 1.1 !important;
+}
+
+.pos-menu-grid,
+.menu-items-grid,
+.products-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)) !important;
+  gap: 14px !important;
+  min-width: 0 !important;
+}
+
+.pos-menu-card,
+.menu-card,
+.product-card {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  border-radius: 24px !important;
+}
+
+.pos-menu-card img,
+.menu-card img,
+.product-card img {
+  width: 100% !important;
+  height: 145px !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+
+.pos-menu-card h3,
+.menu-card h3,
+.product-card h3,
+.pos-menu-card p,
+.menu-card p,
+.product-card p {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  overflow-wrap: anywhere !important;
+}
+
+.checkout-panel,
+.pos-checkout-panel,
+.order-checkout-panel {
+  min-width: 330px !important;
+  overflow: hidden !important;
+}
+
+.checkout-panel h2,
+.pos-checkout-panel h2,
+.order-checkout-panel h2 {
+  line-height: 1.15 !important;
+}
+
+.checkout-panel small,
+.checkout-panel p,
+.pos-checkout-panel small,
+.pos-checkout-panel p {
+  overflow-wrap: anywhere !important;
+}
+
+.receipt-btn,
+.print-receipt-btn,
+.checkout-receipt-btn,
+button[title*="Receipt"],
+button[aria-label*="Receipt"] {
+  min-width: 72px !important;
+  width: auto !important;
+  padding: 8px 12px !important;
+  white-space: normal !important;
+  line-height: 1.05 !important;
+  text-align: center !important;
+  word-break: normal !important;
+}
+
+.pos-chip,
+.pos-pill,
+.checkout-chip,
+.mode-chip {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.pos-left-panel,
+.pos-side-panel {
+  overflow-x: hidden !important;
+}
+
+.pos-left-panel button,
+.pos-side-panel button {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Safer emoji/icon rendering */
+.pos-icon,
+.menu-icon,
+.card-icon,
+.orders-card-icon,
+.kds-icon,
+.bs-avatar,
+.user-avatar {
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", system-ui, sans-serif !important;
+  line-height: 1 !important;
+  overflow: hidden !important;
+}
+
+/* Cashier module should feel like a fast counter terminal */
+body:has(.pos-mode-cashier) .pos-category-row,
+body:has(.cashier-terminal) .pos-category-row {
+  max-height: 78px !important;
+}
+
+@media (max-width: 1300px) {
+  .pos-menu-grid,
+  .menu-items-grid,
+  .products-grid {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)) !important;
+  }
+
+  .checkout-panel,
+  .pos-checkout-panel,
+  .order-checkout-panel {
+    min-width: 310px !important;
+  }
+}
+
+@media (max-width: 1050px) {
+  .checkout-panel,
+  .pos-checkout-panel,
+  .order-checkout-panel {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+}
+
 
