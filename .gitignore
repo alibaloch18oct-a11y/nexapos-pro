@@ -11,3 +11,8 @@ frontend/src/components/*.backup*
 *.env
 backend/.env
 frontend/.env
+
+.env
+*.env
+backend/.env
+frontend/.env

@@ -129,131 +129,17 @@ function ensureCollections(db) {
   return db;
 }
 
-function strictPermissionsForRole(role, extra = {}) {
-  const canEditOrders = Boolean(extra.canEditOrders);
-
-  const map = {
-    owner: {
-      label: "Restaurant Owner",
-      canSwitchBranches: true,
-      canViewAllBranches: true,
-      canManageBranches: true,
-      canManageUsers: true,
-      canViewCosts: true,
-      canViewProfitLoss: true,
-      canViewPurchases: true,
-      canViewReports: true,
-      canEditOrders: true,
-      canRefundOrders: true,
-      canManageMenu: true,
-      canManageInventory: true,
-      canUsePOS: true,
-      canUseKDS: true,
-      canUseDelivery: true
-    },
-    branch_manager: {
-      label: "Branch Manager",
-      canSwitchBranches: false,
-      canViewAllBranches: false,
-      canManageBranches: false,
-      canManageUsers: true,
-      canViewCosts: false,
-      canViewProfitLoss: false,
-      canViewPurchases: false,
-      canViewReports: true,
-      canEditOrders: true,
-      canRefundOrders: false,
-      canManageMenu: true,
-      canManageInventory: true,
-      canUsePOS: true,
-      canUseKDS: true,
-      canUseDelivery: true
-    },
-    cashier: {
-      label: "Cashier",
-      canSwitchBranches: false,
-      canViewAllBranches: false,
-      canManageBranches: false,
-      canManageUsers: false,
-      canViewCosts: false,
-      canViewProfitLoss: false,
-      canViewPurchases: false,
-      canViewReports: false,
-      canEditOrders,
-      canRefundOrders: false,
-      canManageMenu: false,
-      canManageInventory: false,
-      canUsePOS: true,
-      canUseKDS: false,
-      canUseDelivery: false
-    },
-    waiter: {
-      label: "Waiter",
-      canSwitchBranches: false,
-      canViewAllBranches: false,
-      canManageBranches: false,
-      canManageUsers: false,
-      canViewCosts: false,
-      canViewProfitLoss: false,
-      canViewPurchases: false,
-      canViewReports: false,
-      canEditOrders,
-      canRefundOrders: false,
-      canManageMenu: false,
-      canManageInventory: false,
-      canUsePOS: true,
-      canUseKDS: false,
-      canUseDelivery: false
-    },
-    kitchen: {
-      label: "Kitchen Staff",
-      canSwitchBranches: false,
-      canViewAllBranches: false,
-      canManageBranches: false,
-      canManageUsers: false,
-      canViewCosts: false,
-      canViewProfitLoss: false,
-      canViewPurchases: false,
-      canViewReports: false,
-      canEditOrders: false,
-      canRefundOrders: false,
-      canManageMenu: false,
-      canManageInventory: false,
-      canUsePOS: false,
-      canUseKDS: true,
-      canUseDelivery: false
-    },
-    rider: {
-      label: "Delivery Rider",
-      canSwitchBranches: false,
-      canViewAllBranches: false,
-      canManageBranches: false,
-      canManageUsers: false,
-      canViewCosts: false,
-      canViewProfitLoss: false,
-      canViewPurchases: false,
-      canViewReports: false,
-      canEditOrders: false,
-      canRefundOrders: false,
-      canManageMenu: false,
-      canManageInventory: false,
-      canUsePOS: false,
-      canUseKDS: false,
-      canUseDelivery: true
-    }
-  };
-
-  return map[role] || map.cashier;
-}
-
 function defaultPermissions(role) {
-  return strictPermissionsForRole(role);
+  return {
+    ...(ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.cashier)
+  };
 }
 
 function finalPermissions(user) {
-  return strictPermissionsForRole(user.role, {
-    canEditOrders: user.permissions?.canEditOrders
-  });
+  return {
+    ...defaultPermissions(user.role),
+    ...(user.permissions || {})
+  };
 }
 
 function requireTenant(req, res, next) {
@@ -332,29 +218,6 @@ function createDemoBranch(tenantId, name, city, address) {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
-}
-
-function findTenantForSuperSetup(db, tenantOrClientId) {
-  const directTenant = db.tenants.find((item) => item.id === tenantOrClientId);
-  if (directTenant) return directTenant;
-
-  const clientUser = db.users.find((item) => item.id === tenantOrClientId);
-  if (clientUser?.tenantId) {
-    const tenant = db.tenants.find((item) => item.id === clientUser.tenantId);
-    if (tenant) return tenant;
-  }
-
-  const tenantByClientUser = db.tenants.find(
-    (item) => item.ownerUserId === tenantOrClientId || item.userId === tenantOrClientId || item.clientId === tenantOrClientId
-  );
-  if (tenantByClientUser) return tenantByClientUser;
-
-  return null;
-}
-
-function resolveTenantIdForSuperSetup(db, tenantOrClientId) {
-  const tenant = findTenantForSuperSetup(db, tenantOrClientId);
-  return tenant?.id || tenantOrClientId;
 }
 
 module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
@@ -567,9 +430,10 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
         phone: phone || "",
         email: email || "",
         status: "active",
-        permissions: strictPermissionsForRole(role, {
-          canEditOrders: permissions?.canEditOrders
-        }),
+        permissions: {
+          ...defaultPermissions(role),
+          ...(permissions || {})
+        },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -639,9 +503,11 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
     user.phone = phone ?? user.phone;
     user.email = email ?? user.email;
     user.status = status || user.status;
-    user.permissions = strictPermissionsForRole(user.role, {
-      canEditOrders: permissions?.canEditOrders ?? user.permissions?.canEditOrders
-    });
+    user.permissions = {
+      ...defaultPermissions(user.role),
+      ...(user.permissions || {}),
+      ...(permissions || {})
+    };
     user.updatedAt = new Date().toISOString();
 
     makeAudit(db, "USER_UPDATED", req.user.username, {
@@ -725,7 +591,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000001",
           email: "owner@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("owner"),
+          permissions: defaultPermissions("owner"),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         },
@@ -740,7 +606,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000002",
           email: "hydmanager@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("branch_manager"),
+          permissions: defaultPermissions("branch_manager"),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         },
@@ -773,7 +639,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000004",
           email: "hydkitchen@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("kitchen"),
+          permissions: defaultPermissions("kitchen"),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         },
@@ -788,7 +654,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000005",
           email: "hydrider@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("rider"),
+          permissions: defaultPermissions("rider"),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }
@@ -917,7 +783,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000001",
           email: "owner@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("owner"),
+          permissions: defaultPermissions("owner"),
           createdAt: now,
           updatedAt: now
         },
@@ -932,7 +798,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000002",
           email: "hydcashier@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("cashier", { canEditOrders: true }),
+          permissions: { ...defaultPermissions("cashier"), canEditOrders: true },
           createdAt: now,
           updatedAt: now
         },
@@ -947,7 +813,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000003",
           email: "khicashier@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("cashier", { canEditOrders: true }),
+          permissions: { ...defaultPermissions("cashier"), canEditOrders: true },
           createdAt: now,
           updatedAt: now
         },
@@ -962,7 +828,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000004",
           email: "kitchen@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("kitchen"),
+          permissions: defaultPermissions("kitchen"),
           createdAt: now,
           updatedAt: now
         },
@@ -977,7 +843,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000005",
           email: "rider@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("rider"),
+          permissions: defaultPermissions("rider"),
           createdAt: now,
           updatedAt: now
         }
@@ -1189,266 +1055,6 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
       });
     }
   });
-
-
-
-  router.get("/super/tenants/:tenantId/branches", requireSuperAdmin, (req, res) => {
-    const db = ensureCollections(readDb());
-    const { tenantId } = req.params;
-
-    const tenant = findTenantForSuperSetup(db, tenantId);
-
-    if (!tenant) {
-      return res.status(404).json({ message: "Restaurant client not found." });
-    }
-
-    const branches = db.branches
-      .filter((branch) => branch.tenantId === resolveTenantIdForSuperSetup(db, tenantId))
-      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
-
-    res.json({ tenant, branches });
-  });
-
-  router.post("/super/tenants/:tenantId/branches", requireSuperAdmin, (req, res) => {
-    const db = ensureCollections(readDb());
-    const { tenantId } = req.params;
-    const { name, city, address, phone, status } = req.body;
-
-    const tenant = findTenantForSuperSetup(db, tenantId);
-
-    if (!tenant) {
-      return res.status(404).json({ message: "Restaurant client not found." });
-    }
-
-    if (!name) {
-      return res.status(400).json({ message: "Branch name is required." });
-    }
-
-    const exists = db.branches.some(
-      (branch) =>
-        branch.tenantId === resolveTenantIdForSuperSetup(db, tenantId) &&
-        String(branch.name || "").toLowerCase() === String(name).toLowerCase()
-    );
-
-    if (exists) {
-      return res.status(409).json({ message: "Branch already exists for this restaurant." });
-    }
-
-    const realTenantId = resolveTenantIdForSuperSetup(db, tenantId);
-
-    const branch = {
-      id: uuid(),
-      tenantId: realTenantId,
-      name,
-      city: city || "",
-      address: address || "",
-      phone: phone || "",
-      status: status || "active",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    db.branches.push(branch);
-
-    makeAudit(db, "SUPER_BRANCH_CREATED", req.user.username, {
-      tenantId,
-      tenantName: tenant.restaurantName,
-      branchId: branch.id,
-      branchName: branch.name
-    });
-
-    writeDb(db);
-
-    res.status(201).json({
-      message: "Branch created successfully.",
-      branch
-    });
-  });
-
-  router.patch("/super/tenants/:tenantId/branches/:branchId", requireSuperAdmin, (req, res) => {
-    const db = ensureCollections(readDb());
-    const { tenantId, branchId } = req.params;
-    const { name, city, address, phone, status } = req.body;
-
-    const branch = db.branches.find(
-      (item) => item.tenantId === tenantId && item.id === branchId
-    );
-
-    if (!branch) {
-      return res.status(404).json({ message: "Branch not found." });
-    }
-
-    branch.name = name || branch.name;
-    branch.city = city ?? branch.city;
-    branch.address = address ?? branch.address;
-    branch.phone = phone ?? branch.phone;
-    branch.status = status || branch.status;
-    branch.updatedAt = new Date().toISOString();
-
-    makeAudit(db, "SUPER_BRANCH_UPDATED", req.user.username, {
-      tenantId,
-      branchId,
-      branchName: branch.name
-    });
-
-    writeDb(db);
-
-    res.json({
-      message: "Branch updated successfully.",
-      branch
-    });
-  });
-
-  router.get("/super/tenants/:tenantId/users", requireSuperAdmin, (req, res) => {
-    const db = ensureCollections(readDb());
-    const { tenantId } = req.params;
-
-    const tenant = findTenantForSuperSetup(db, tenantId);
-
-    if (!tenant) {
-      return res.status(404).json({ message: "Restaurant client not found." });
-    }
-
-    const users = db.users
-      .filter((user) => user.tenantId === resolveTenantIdForSuperSetup(db, tenantId))
-      .map(cleanUser)
-      .sort((a, b) => String(a.name || a.username || "").localeCompare(String(b.name || b.username || "")));
-
-    res.json({ tenant, users });
-  });
-
-  router.post("/super/tenants/:tenantId/users", requireSuperAdmin, async (req, res) => {
-    try {
-      const db = ensureCollections(readDb());
-      const { tenantId } = req.params;
-      const { name, username, password, role, branchId, phone, email, permissions } = req.body;
-
-      const tenant = findTenantForSuperSetup(db, tenantId);
-
-      if (!tenant) {
-        return res.status(404).json({ message: "Restaurant client not found." });
-      }
-
-      if (!name || !username || !password || !role) {
-        return res.status(400).json({ message: "Name, username, password and role are required." });
-      }
-
-      if (!ROLE_PERMISSIONS[role]) {
-        return res.status(400).json({ message: "Invalid role." });
-      }
-
-      if (role !== "owner" && !branchId) {
-        return res.status(400).json({ message: "Branch is required for staff/manager logins." });
-      }
-
-      const exists = db.users.some(
-        (user) => String(user.username || "").toLowerCase() === String(username).toLowerCase()
-      );
-
-      if (exists) {
-        return res.status(409).json({ message: "Username already exists." });
-      }
-
-      if (branchId) {
-        const branch = db.branches.find(
-          (item) => item.tenantId === tenantId && item.id === branchId
-        );
-
-        if (!branch) {
-          return res.status(404).json({ message: "Branch not found for this restaurant." });
-        }
-      }
-
-      const passwordHash = await hashPassword(password);
-
-      const realTenantId = resolveTenantIdForSuperSetup(db, tenantId);
-
-      const user = {
-        id: uuid(),
-        tenantId: realTenantId,
-        branchId: role === "owner" ? null : branchId,
-        name,
-        username,
-        passwordHash,
-        role,
-        phone: phone || "",
-        email: email || "",
-        status: "active",
-        permissions: strictPermissionsForRole(role, {
-          canEditOrders: permissions?.canEditOrders
-        }),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      db.users.push(user);
-
-      makeAudit(db, "SUPER_USER_CREATED", req.user.username, {
-        tenantId,
-        tenantName: tenant.restaurantName,
-        userId: user.id,
-        username: user.username,
-        role: user.role,
-        branchId: user.branchId
-      });
-
-      writeDb(db);
-
-      res.status(201).json({
-        message: "Login created successfully.",
-        user: cleanUser(user),
-        login: { username, password }
-      });
-    } catch (error) {
-      console.error("Super create user error:", error);
-      res.status(500).json({ message: "Failed to create login.", error: error.message });
-    }
-  });
-
-  router.patch("/super/tenants/:tenantId/users/:userId", requireSuperAdmin, (req, res) => {
-    const db = ensureCollections(readDb());
-    const { tenantId, userId } = req.params;
-    const { name, role, branchId, phone, email, status, permissions } = req.body;
-
-    const user = db.users.find(
-      (item) => item.tenantId === tenantId && item.id === userId
-    );
-
-    if (!user) {
-      return res.status(404).json({ message: "Login not found." });
-    }
-
-    if (role && !ROLE_PERMISSIONS[role]) {
-      return res.status(400).json({ message: "Invalid role." });
-    }
-
-    user.name = name || user.name;
-    user.role = role || user.role;
-    user.branchId = user.role === "owner" ? null : branchId || user.branchId;
-    user.phone = phone ?? user.phone;
-    user.email = email ?? user.email;
-    user.status = status || user.status;
-    user.permissions = strictPermissionsForRole(user.role, {
-      canEditOrders: permissions?.canEditOrders ?? user.permissions?.canEditOrders
-    });
-    user.updatedAt = new Date().toISOString();
-
-    makeAudit(db, "SUPER_USER_UPDATED", req.user.username, {
-      tenantId,
-      userId: user.id,
-      username: user.username,
-      role: user.role,
-      branchId: user.branchId
-    });
-
-    writeDb(db);
-
-    res.json({
-      message: "Login updated successfully.",
-      user: cleanUser(user)
-    });
-  });
-
 
   return router;
 };

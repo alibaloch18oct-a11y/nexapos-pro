@@ -129,131 +129,17 @@ function ensureCollections(db) {
   return db;
 }
 
-function strictPermissionsForRole(role, extra = {}) {
-  const canEditOrders = Boolean(extra.canEditOrders);
-
-  const map = {
-    owner: {
-      label: "Restaurant Owner",
-      canSwitchBranches: true,
-      canViewAllBranches: true,
-      canManageBranches: true,
-      canManageUsers: true,
-      canViewCosts: true,
-      canViewProfitLoss: true,
-      canViewPurchases: true,
-      canViewReports: true,
-      canEditOrders: true,
-      canRefundOrders: true,
-      canManageMenu: true,
-      canManageInventory: true,
-      canUsePOS: true,
-      canUseKDS: true,
-      canUseDelivery: true
-    },
-    branch_manager: {
-      label: "Branch Manager",
-      canSwitchBranches: false,
-      canViewAllBranches: false,
-      canManageBranches: false,
-      canManageUsers: true,
-      canViewCosts: false,
-      canViewProfitLoss: false,
-      canViewPurchases: false,
-      canViewReports: true,
-      canEditOrders: true,
-      canRefundOrders: false,
-      canManageMenu: true,
-      canManageInventory: true,
-      canUsePOS: true,
-      canUseKDS: true,
-      canUseDelivery: true
-    },
-    cashier: {
-      label: "Cashier",
-      canSwitchBranches: false,
-      canViewAllBranches: false,
-      canManageBranches: false,
-      canManageUsers: false,
-      canViewCosts: false,
-      canViewProfitLoss: false,
-      canViewPurchases: false,
-      canViewReports: false,
-      canEditOrders,
-      canRefundOrders: false,
-      canManageMenu: false,
-      canManageInventory: false,
-      canUsePOS: true,
-      canUseKDS: false,
-      canUseDelivery: false
-    },
-    waiter: {
-      label: "Waiter",
-      canSwitchBranches: false,
-      canViewAllBranches: false,
-      canManageBranches: false,
-      canManageUsers: false,
-      canViewCosts: false,
-      canViewProfitLoss: false,
-      canViewPurchases: false,
-      canViewReports: false,
-      canEditOrders,
-      canRefundOrders: false,
-      canManageMenu: false,
-      canManageInventory: false,
-      canUsePOS: true,
-      canUseKDS: false,
-      canUseDelivery: false
-    },
-    kitchen: {
-      label: "Kitchen Staff",
-      canSwitchBranches: false,
-      canViewAllBranches: false,
-      canManageBranches: false,
-      canManageUsers: false,
-      canViewCosts: false,
-      canViewProfitLoss: false,
-      canViewPurchases: false,
-      canViewReports: false,
-      canEditOrders: false,
-      canRefundOrders: false,
-      canManageMenu: false,
-      canManageInventory: false,
-      canUsePOS: false,
-      canUseKDS: true,
-      canUseDelivery: false
-    },
-    rider: {
-      label: "Delivery Rider",
-      canSwitchBranches: false,
-      canViewAllBranches: false,
-      canManageBranches: false,
-      canManageUsers: false,
-      canViewCosts: false,
-      canViewProfitLoss: false,
-      canViewPurchases: false,
-      canViewReports: false,
-      canEditOrders: false,
-      canRefundOrders: false,
-      canManageMenu: false,
-      canManageInventory: false,
-      canUsePOS: false,
-      canUseKDS: false,
-      canUseDelivery: true
-    }
-  };
-
-  return map[role] || map.cashier;
-}
-
 function defaultPermissions(role) {
-  return strictPermissionsForRole(role);
+  return {
+    ...(ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.cashier)
+  };
 }
 
 function finalPermissions(user) {
-  return strictPermissionsForRole(user.role, {
-    canEditOrders: user.permissions?.canEditOrders
-  });
+  return {
+    ...defaultPermissions(user.role),
+    ...(user.permissions || {})
+  };
 }
 
 function requireTenant(req, res, next) {
@@ -567,9 +453,10 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
         phone: phone || "",
         email: email || "",
         status: "active",
-        permissions: strictPermissionsForRole(role, {
-          canEditOrders: permissions?.canEditOrders
-        }),
+        permissions: {
+          ...defaultPermissions(role),
+          ...(permissions || {})
+        },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -639,9 +526,11 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
     user.phone = phone ?? user.phone;
     user.email = email ?? user.email;
     user.status = status || user.status;
-    user.permissions = strictPermissionsForRole(user.role, {
-      canEditOrders: permissions?.canEditOrders ?? user.permissions?.canEditOrders
-    });
+    user.permissions = {
+      ...defaultPermissions(user.role),
+      ...(user.permissions || {}),
+      ...(permissions || {})
+    };
     user.updatedAt = new Date().toISOString();
 
     makeAudit(db, "USER_UPDATED", req.user.username, {
@@ -725,7 +614,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000001",
           email: "owner@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("owner"),
+          permissions: defaultPermissions("owner"),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         },
@@ -740,7 +629,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000002",
           email: "hydmanager@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("branch_manager"),
+          permissions: defaultPermissions("branch_manager"),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         },
@@ -773,7 +662,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000004",
           email: "hydkitchen@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("kitchen"),
+          permissions: defaultPermissions("kitchen"),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         },
@@ -788,7 +677,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000005",
           email: "hydrider@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("rider"),
+          permissions: defaultPermissions("rider"),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }
@@ -917,7 +806,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000001",
           email: "owner@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("owner"),
+          permissions: defaultPermissions("owner"),
           createdAt: now,
           updatedAt: now
         },
@@ -932,7 +821,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000002",
           email: "hydcashier@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("cashier", { canEditOrders: true }),
+          permissions: { ...defaultPermissions("cashier"), canEditOrders: true },
           createdAt: now,
           updatedAt: now
         },
@@ -947,7 +836,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000003",
           email: "khicashier@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("cashier", { canEditOrders: true }),
+          permissions: { ...defaultPermissions("cashier"), canEditOrders: true },
           createdAt: now,
           updatedAt: now
         },
@@ -962,7 +851,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000004",
           email: "kitchen@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("kitchen"),
+          permissions: defaultPermissions("kitchen"),
           createdAt: now,
           updatedAt: now
         },
@@ -977,7 +866,7 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
           phone: "03000000005",
           email: "rider@nexademo.com",
           status: "active",
-          permissions: strictPermissionsForRole("rider"),
+          permissions: defaultPermissions("rider"),
           createdAt: now,
           updatedAt: now
         }
@@ -1374,9 +1263,10 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
         phone: phone || "",
         email: email || "",
         status: "active",
-        permissions: strictPermissionsForRole(role, {
-          canEditOrders: permissions?.canEditOrders
-        }),
+        permissions: {
+          ...defaultPermissions(role),
+          ...(permissions || {})
+        },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -1428,9 +1318,11 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
     user.phone = phone ?? user.phone;
     user.email = email ?? user.email;
     user.status = status || user.status;
-    user.permissions = strictPermissionsForRole(user.role, {
-      canEditOrders: permissions?.canEditOrders ?? user.permissions?.canEditOrders
-    });
+    user.permissions = {
+      ...defaultPermissions(user.role),
+      ...(user.permissions || {}),
+      ...(permissions || {})
+    };
     user.updatedAt = new Date().toISOString();
 
     makeAudit(db, "SUPER_USER_UPDATED", req.user.username, {
