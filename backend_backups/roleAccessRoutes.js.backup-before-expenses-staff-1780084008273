@@ -357,39 +357,6 @@ function resolveTenantIdForSuperSetup(db, tenantOrClientId) {
   return tenant?.id || tenantOrClientId;
 }
 
-function staffExtraFieldsFromBody(body = {}) {
-  return {
-    designation: body.designation || "",
-    salary: Number(body.salary || 0),
-    salaryType: body.salaryType || "monthly",
-    cnic: body.cnic || "",
-    shift: body.shift || "",
-    joiningDate: body.joiningDate || "",
-    emergencyContact: body.emergencyContact || "",
-    address: body.address || "",
-    notes: body.notes || ""
-  };
-}
-
-function resolveRequestBranchId(req, branches = []) {
-  const requested = req.query.branchId || req.body.branchId || "";
-  if (requested && requested !== "all") return requested;
-
-  if (req.user?.branchId) return req.user.branchId;
-
-  return "";
-}
-
-function userCanViewAllBranches(user) {
-  const permissions = finalPermissions(user || {});
-  return permissions.canViewAllBranches === true;
-}
-
-function userCanManageExpenses(user) {
-  const permissions = finalPermissions(user || {});
-  return permissions.canViewProfitLoss === true || permissions.canViewReports === true || user?.role === "owner" || user?.role === "branch_manager";
-}
-
 module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
   router.get("/roles", (req, res) => {
     res.json({
@@ -599,7 +566,6 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
         role,
         phone: phone || "",
         email: email || "",
-        ...staffExtraFieldsFromBody(req.body),
         status: "active",
         permissions: strictPermissionsForRole(role, {
           canEditOrders: permissions?.canEditOrders
@@ -672,7 +638,6 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
     user.branchId = branchId || user.branchId;
     user.phone = phone ?? user.phone;
     user.email = email ?? user.email;
-    Object.assign(user, staffExtraFieldsFromBody(req.body));
     user.status = status || user.status;
     user.permissions = strictPermissionsForRole(user.role, {
       canEditOrders: permissions?.canEditOrders ?? user.permissions?.canEditOrders
@@ -1408,7 +1373,6 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
         role,
         phone: phone || "",
         email: email || "",
-        ...staffExtraFieldsFromBody(req.body),
         status: "active",
         permissions: strictPermissionsForRole(role, {
           canEditOrders: permissions?.canEditOrders
@@ -1463,7 +1427,6 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
     user.branchId = user.role === "owner" ? null : branchId || user.branchId;
     user.phone = phone ?? user.phone;
     user.email = email ?? user.email;
-    Object.assign(user, staffExtraFieldsFromBody(req.body));
     user.status = status || user.status;
     user.permissions = strictPermissionsForRole(user.role, {
       canEditOrders: permissions?.canEditOrders ?? user.permissions?.canEditOrders
@@ -1484,125 +1447,6 @@ module.exports = function roleAccessRoutes({ readDb, writeDb, hashPassword }) {
       message: "Login updated successfully.",
       user: cleanUser(user)
     });
-  });
-
-
-
-
-  router.get("/branch-expenses", requireTenant, (req, res) => {
-    const db = ensureCollections(readDb());
-    db.expenses = Array.isArray(db.expenses) ? db.expenses : [];
-
-    const currentUser = db.users.find((item) => item.id === req.user.id) || req.user;
-    const canAll = userCanViewAllBranches(currentUser);
-    const branchId = resolveRequestBranchId(req);
-
-    let expenses = db.expenses.filter((item) => item.tenantId === req.user.tenantId);
-
-    if (!canAll) {
-      expenses = expenses.filter((item) => String(item.branchId || "") === String(req.user.branchId || ""));
-    } else if (branchId && branchId !== "all") {
-      expenses = expenses.filter((item) => String(item.branchId || "") === String(branchId));
-    }
-
-    expenses = expenses.sort((a, b) => new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0));
-
-    res.json({ expenses });
-  });
-
-  router.post("/branch-expenses", requireTenant, (req, res) => {
-    const db = ensureCollections(readDb());
-    db.expenses = Array.isArray(db.expenses) ? db.expenses : [];
-
-    const currentUser = db.users.find((item) => item.id === req.user.id) || req.user;
-
-    if (!userCanManageExpenses(currentUser)) {
-      return res.status(403).json({ message: "You are not allowed to manage expenses." });
-    }
-
-    const { title, category, amount, date, paymentMethod, note, vendor, branchId, branchName } = req.body;
-
-    if (!title || !amount) {
-      return res.status(400).json({ message: "Expense title and amount are required." });
-    }
-
-    const targetBranchId = currentUser.role === "owner" ? branchId : req.user.branchId;
-
-    if (!targetBranchId) {
-      return res.status(400).json({ message: "Branch is required for expense." });
-    }
-
-    const branch = db.branches.find(
-      (item) => item.tenantId === req.user.tenantId && item.id === targetBranchId
-    );
-
-    const expense = {
-      id: uuid(),
-      tenantId: req.user.tenantId,
-      branchId: targetBranchId,
-      branchName: branchName || branch?.name || "",
-      title,
-      category: category || "General",
-      amount: Number(amount || 0),
-      date: date || new Date().toISOString().slice(0, 10),
-      paymentMethod: paymentMethod || "Cash",
-      vendor: vendor || "",
-      note: note || "",
-      status: "active",
-      createdBy: req.user.username,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    db.expenses.push(expense);
-
-    makeAudit(db, "EXPENSE_CREATED", req.user.username, {
-      expenseId: expense.id,
-      branchId: expense.branchId,
-      title: expense.title,
-      amount: expense.amount
-    });
-
-    writeDb(db);
-
-    res.status(201).json({ message: "Expense created successfully.", expense });
-  });
-
-  router.patch("/branch-expenses/:expenseId", requireTenant, (req, res) => {
-    const db = ensureCollections(readDb());
-    db.expenses = Array.isArray(db.expenses) ? db.expenses : [];
-
-    const currentUser = db.users.find((item) => item.id === req.user.id) || req.user;
-
-    if (!userCanManageExpenses(currentUser)) {
-      return res.status(403).json({ message: "You are not allowed to edit expenses." });
-    }
-
-    const expense = db.expenses.find(
-      (item) => item.tenantId === req.user.tenantId && item.id === req.params.expenseId
-    );
-
-    if (!expense) {
-      return res.status(404).json({ message: "Expense not found." });
-    }
-
-    if (!userCanViewAllBranches(currentUser) && String(expense.branchId || "") !== String(req.user.branchId || "")) {
-      return res.status(403).json({ message: "You can only edit your branch expenses." });
-    }
-
-    const allowed = ["title", "category", "amount", "date", "paymentMethod", "vendor", "note", "status", "branchId", "branchName"];
-
-    allowed.forEach((key) => {
-      if (req.body[key] !== undefined) {
-        expense[key] = key === "amount" ? Number(req.body[key] || 0) : req.body[key];
-      }
-    });
-
-    expense.updatedAt = new Date().toISOString();
-
-    writeDb(db);
-
-    res.json({ message: "Expense updated successfully.", expense });
   });
 
 
