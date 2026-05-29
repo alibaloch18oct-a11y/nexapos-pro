@@ -244,7 +244,7 @@ function SettingsModal({ settings, setSettings, onClose, onSave, saving }) {
             <h2>KDS Auto Timer Settings</h2>
             <p>Owner can adjust exact kitchen and delivery timers.</p>
           </div>
-          <button className="kds-icon-btn" onClick={onClose}>{"\u00D7"}</button>
+          <button className="kds-icon-btn" onClick={onClose}>ï¿½</button>
         </div>
 
         <label className="kds-toggle-row">
@@ -604,7 +604,7 @@ export default function KDSPanel({ token, session, roleContext, activeModuleBran
 
     const interval = setInterval(() => {
       loadBoard({ silent: true });
-    }, 8000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [autoRefreshEnabled, soundEnabled]);
@@ -1217,7 +1217,7 @@ export default function KDSPanel({ token, session, roleContext, activeModuleBran
       )}
 
       <p className="kds-muted">
-        Last refresh: {lastRefreshAt || "Not refreshed"} {"\u2022"} Auto timer: {settings.autoEnabled ? "Enabled" : "Disabled"}
+        Last refresh: {lastRefreshAt || "Not refreshed"} ï¿½ Auto timer: {settings.autoEnabled ? "Enabled" : "Disabled"}
       </p>
 
       {settingsOpen ? (
@@ -1232,8 +1232,6 @@ export default function KDSPanel({ token, session, roleContext, activeModuleBran
     </div>
   );
 }
-
-
 
 
 

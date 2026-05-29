@@ -1,6 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
-import { cachedRequest, cacheKey, clearCache } from "../lib/performanceCache";
 import ThermalReceipt from "./ThermalReceipt";
 
 const defaultSettings = {
@@ -614,16 +613,8 @@ export default function OrdersPanel({ token, session, roleContext, activeModuleB
 
       // Load broad list, then enforce branch separation in frontend.
       // This guarantees owner branch dropdown works even before backend filtering is perfect.
-      const orderData = await cachedRequest(
-        cacheKey("orders", { limit: 300 }),
-        async () => {
-          const res = await api(token).get("/api/orders?limit=300");
-          return res.data;
-        },
-        8000
-      );
-
-      const list = Array.isArray(orderData) ? orderData : orderData.orders || [];
+      const res = await api(token).get("/api/orders?limit=500");
+      const list = Array.isArray(res.data) ? res.data : res.data.orders || [];
 
       const finalList =
         targetBranchId && targetBranchId !== "all"
@@ -1526,7 +1517,6 @@ export default function OrdersPanel({ token, session, roleContext, activeModuleB
     </div>
   );
 }
-
 
 
 

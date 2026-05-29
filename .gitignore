@@ -6,3 +6,8 @@ build
 *.log
 backend/data/*.backup*
 frontend/src/components/*.backup*
+
+.env
+*.env
+backend/.env
+frontend/.env

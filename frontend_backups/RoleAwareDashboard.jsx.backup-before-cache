@@ -1,6 +1,5 @@
 ﻿import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { cachedRequest, cacheKey } from "../lib/performanceCache";
 import ClientDashboard from "./ClientDashboard";
 
 export default function RoleAwareDashboard({ token, session, onOpenModule, onRoleContext }) {
@@ -11,17 +10,9 @@ export default function RoleAwareDashboard({ token, session, onOpenModule, onRol
     setLoading(true);
 
     try {
-      const data = await cachedRequest(
-        cacheKey("role-context", { user: session?.user?.id || session?.user?.username || "user" }),
-        async () => {
-          const res = await api(token).get("/api/role-access/context");
-          return res.data;
-        },
-        30000
-      );
-
-      setContext(data);
-      onRoleContext?.(data);
+      const res = await api(token).get("/api/role-access/context");
+      setContext(res.data);
+      onRoleContext?.(res.data);
     } catch (error) {
       console.warn("Role context failed:", error.response?.data?.message || error.message);
       setContext(null);
@@ -79,5 +70,4 @@ export default function RoleAwareDashboard({ token, session, onOpenModule, onRol
     />
   );
 }
-
 
